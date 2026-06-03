@@ -24,6 +24,7 @@ class Settings(BaseSettings):
     longbridge_app_secret: str = ""
     longbridge_access_token: str = ""
     longbridge_account: str = ""
+    longbridge_http_url: str = ""
 
     model_config = SettingsConfigDict(
         env_file=".env",

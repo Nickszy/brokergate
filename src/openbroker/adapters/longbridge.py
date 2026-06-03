@@ -60,10 +60,15 @@ class LongbridgeOpenApiAdapter(BrokerAdapter):
         from openbroker.config import settings
         from longbridge.openapi import Config
 
-        config = Config(
+        kwargs = {}
+        if settings.longbridge_http_url:
+            kwargs["http_url"] = settings.longbridge_http_url
+
+        config = Config.from_apikey(
             app_key=settings.longbridge_app_key,
             app_secret=settings.longbridge_app_secret,
             access_token=settings.longbridge_access_token,
+            **kwargs
         )
         return config
 
@@ -135,32 +140,33 @@ class LongbridgeOpenApiAdapter(BrokerAdapter):
             config = self._get_longbridge_config()
             ctx = TradeContext(config)
 
-            sdk_positions = ctx.stock_positions()
-            if not sdk_positions:
+            sdk_resp = ctx.stock_positions()
+            if not sdk_resp or not sdk_resp.channels:
                 return []
 
             unified_positions = []
-            for pos in sdk_positions:
-                symbol = pos.symbol if pos.symbol else ""
-                name = pos.symbol_name if pos.symbol_name else ""
-                currency = pos.currency if pos.currency else "HKD"
+            for chan in sdk_resp.channels:
+                for pos in chan.positions:
+                    symbol = pos.symbol if pos.symbol else ""
+                    name = pos.symbol_name if pos.symbol_name else ""
+                    currency = pos.currency if pos.currency else "HKD"
 
-                quantity = Decimal(str(pos.quantity)) if pos.quantity is not None else Decimal("0")
-                cost_price = Decimal(str(pos.cost_price)) if pos.cost_price is not None else Decimal("0")
-                market_value = quantity * cost_price
+                    quantity = Decimal(str(pos.quantity)) if pos.quantity is not None else Decimal("0")
+                    cost_price = Decimal(str(pos.cost_price)) if pos.cost_price is not None else Decimal("0")
+                    market_value = quantity * cost_price
 
-                unified_positions.append(
-                    Position(
-                        broker=BrokerId.longbridge,
-                        account_id=account_id,
-                        symbol=symbol,
-                        name=name,
-                        quantity=quantity,
-                        market_value=market_value,
-                        currency=currency,
-                        cost_basis=cost_price,
+                    unified_positions.append(
+                        Position(
+                            broker=BrokerId.longbridge,
+                            account_id=account_id,
+                            symbol=symbol,
+                            name=name,
+                            quantity=quantity,
+                            market_value=market_value,
+                            currency=currency,
+                            cost_basis=cost_price,
+                        )
                     )
-                )
             return unified_positions
         except Exception as e:
             raise RuntimeError(f"Failed to list positions from Longbridge: {str(e)}") from e

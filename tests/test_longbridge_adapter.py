@@ -38,8 +38,14 @@ async def test_longbridge_adapter_list_positions(mock_config_cls, mock_ctx_cls):
     mock_pos.quantity = 200.0
     mock_pos.cost_price = 350.0
 
+    mock_channel = MagicMock()
+    mock_channel.positions = [mock_pos]
+
+    mock_resp = MagicMock()
+    mock_resp.channels = [mock_channel]
+
     mock_ctx = mock_ctx_cls.return_value
-    mock_ctx.stock_positions.return_value = [mock_pos]
+    mock_ctx.stock_positions.return_value = mock_resp
 
     adapter = LongbridgeOpenApiAdapter()
     positions = await adapter.list_positions("LB12345")
