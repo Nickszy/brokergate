@@ -1,15 +1,15 @@
-# Tiger OpenAPI Integration Guide
+﻿# Tiger OpenAPI Integration Guide
 
 ## 目标
 
-这份文档说明 OpenBroker 如何接入老虎证券 OpenAPI。接入顺序必须是：
+这份文档说明 BrokerGate 如何接入老虎证券 OpenAPI。接入顺序必须是：
 
 1. 先跑通 SDK 连接。
 2. 再接账户和持仓查询。
 3. 再接 paper 下单。
-4. 最后才允许 live 下单，并且必须走 OpenBroker 的订单草稿和人工确认流程。
+4. 最后才允许 live 下单，并且必须走 BrokerGate 的订单草稿和人工确认流程。
 
-不要把老虎 SDK 直接暴露给 AI/MCP 或外部 API。OpenBroker 的交易入口只能是：
+不要把老虎 SDK 直接暴露给 AI/MCP 或外部 API。BrokerGate 的交易入口只能是：
 
 ```text
 POST /v1/orders/drafts -> POST /v1/orders/{draft_id}/confirm -> Tiger Adapter
@@ -60,7 +60,7 @@ uv pip install tigeropen
 推荐把老虎官方配置文件放在不进仓库的目录，例如：
 
 ```text
-C:\Users\zheyu\.openbroker\tiger\
+C:\Users\zheyu\.brokergate\tiger\
   tiger_openapi_config.properties
   tiger_openapi_token.properties
   private_key_pk1.pem
@@ -69,33 +69,33 @@ C:\Users\zheyu\.openbroker\tiger\
 `.env` 中只保存路径和开关：
 
 ```env
-OPENBROKER_TIGER_ENABLED=true
-OPENBROKER_TIGER_ACCOUNT=20191106192858300
-OPENBROKER_TIGER_ID=20150001
-OPENBROKER_TIGER_LICENSE=TBHK
-OPENBROKER_TIGER_CONFIG_DIR=C:/Users/zheyu/.openbroker/tiger
-OPENBROKER_TIGER_PRIVATE_KEY_PATH=C:/Users/zheyu/.openbroker/tiger/private_key_pk1.pem
-OPENBROKER_TIGER_TOKEN_PATH=C:/Users/zheyu/.openbroker/tiger/tiger_openapi_token.properties
-OPENBROKER_BROKER_MODE=paper
+BROKERGATE_TIGER_ENABLED=true
+BROKERGATE_TIGER_ACCOUNT=20191106192858300
+BROKERGATE_TIGER_ID=20150001
+BROKERGATE_TIGER_LICENSE=TBHK
+BROKERGATE_TIGER_CONFIG_DIR=C:/Users/zheyu/.brokergate/tiger
+BROKERGATE_TIGER_PRIVATE_KEY_PATH=C:/Users/zheyu/.brokergate/tiger/private_key_pk1.pem
+BROKERGATE_TIGER_TOKEN_PATH=C:/Users/zheyu/.brokergate/tiger/tiger_openapi_token.properties
+BROKERGATE_BROKER_MODE=paper
 ```
 
 Windows 路径建议在 `.env` 里使用 `/`，避免反斜杠转义问题。
 
 ## SDK 初始化方式
 
-OpenBroker 的 Tiger adapter 应支持两种初始化方式。
+BrokerGate 的 Tiger adapter 应支持两种初始化方式。
 
 ### 方式一：官方 properties 文件
 
 ```python
 from tigeropen.tiger_open_config import TigerOpenClientConfig
 
-config = TigerOpenClientConfig(props_path="C:/Users/zheyu/.openbroker/tiger")
+config = TigerOpenClientConfig(props_path="C:/Users/zheyu/.brokergate/tiger")
 ```
 
 适合直接使用老虎下载的 `tiger_openapi_config.properties` 和 token 文件。
 
-### 方式二：OpenBroker 环境变量
+### 方式二：BrokerGate 环境变量
 
 ```python
 from pathlib import Path
@@ -110,28 +110,28 @@ config.private_key = Path(settings.tiger_private_key_path).read_text(encoding="u
 
 适合后续 Web 配置面板和加密凭证存储。
 
-## OpenBroker 适配器落点
+## BrokerGate 适配器落点
 
 真实 Tiger 接入应该改这些文件：
 
 - `pyproject.toml`：加入 `tigeropen` 依赖。
-- `src/openbroker/config.py`：加入 Tiger 配置项。
-- `src/openbroker/adapters/tiger.py`：把 `TigerPaperAdapter` 拆成 `TigerOpenApiAdapter` 和 `TigerPaperAdapter`。
-- `src/openbroker/adapters/base.py`：补全 `test_connection()`、`get_account_summary()`、`list_positions()`、`list_orders()`。
-- `src/openbroker/services.py`：根据 `OPENBROKER_TIGER_ENABLED` 和 `OPENBROKER_BROKER_MODE` 注册真实或 paper adapter。
-- `src/openbroker/main.py`：增加账户、持仓、订单查询 API。
+- `src/brokergate/config.py`：加入 Tiger 配置项。
+- `src/brokergate/adapters/tiger.py`：把 `TigerPaperAdapter` 拆成 `TigerOpenApiAdapter` 和 `TigerPaperAdapter`。
+- `src/brokergate/adapters/base.py`：补全 `test_connection()`、`get_account_summary()`、`list_positions()`、`list_orders()`。
+- `src/brokergate/services.py`：根据 `BROKERGATE_TIGER_ENABLED` 和 `BROKERGATE_BROKER_MODE` 注册真实或 paper adapter。
+- `src/brokergate/main.py`：增加账户、持仓、订单查询 API。
 - `tests/`：保留 paper 单元测试，新增 Tiger SDK mock 测试，不在 CI 里打真实券商 API。
 
 ## API 映射
 
-OpenBroker 统一 API 和 Tiger SDK 的职责映射：
+BrokerGate 统一 API 和 Tiger SDK 的职责映射：
 
-| OpenBroker 能力 | Tiger SDK 客户端 | 说明 |
+| BrokerGate 能力 | Tiger SDK 客户端 | 说明 |
 |---|---|---|
 | 连接测试 | TradeClient / account query | 用最小账户查询验证配置 |
 | 账户摘要 | TradeClient | 查询资产、现金、购买力 |
 | 持仓列表 | TradeClient | 转成统一 Position 模型 |
-| 订单草稿 | OpenBroker workflow | 不调用 Tiger |
+| 订单草稿 | BrokerGate workflow | 不调用 Tiger |
 | 确认下单 | TradeClient | 只允许从 confirmed draft 调用 |
 | 订单状态 | TradeClient | 用 broker_order_id 查询 |
 | 行情查询 | QuoteClient | 可选，行情权限可能单独收费 |
@@ -148,7 +148,7 @@ async def submit_order(self, draft: OrderDraft) -> BrokerOrderReceipt:
 
 必须保留这些保护：
 
-- `OPENBROKER_BROKER_MODE=paper` 是默认值。
+- `BROKERGATE_BROKER_MODE=paper` 是默认值。
 - live 模式必须显式开启。
 - live 模式必须设置强 API Key。
 - live 下单必须写审计日志。
@@ -169,10 +169,10 @@ uv run python scripts/check_tiger_connection.py
 - 能创建 Tiger client。
 - 能查询账户或 paper account 基础信息。
 
-### 2. OpenBroker 查询
+### 2. BrokerGate 查询
 
 ```powershell
-uv run uvicorn openbroker.main:app --reload
+uv run uvicorn brokergate.main:app --reload
 ```
 
 访问：
@@ -195,7 +195,7 @@ uv run uvicorn openbroker.main:app --reload
 live 前必须逐项确认：
 
 - API Key 已替换，不是 `change-me`。
-- `OPENBROKER_BROKER_MODE=live-trade` 是手动设置。
+- `BROKERGATE_BROKER_MODE=live-trade` 是手动设置。
 - Tiger 账户号是目标账户，不是误用其他账户。
 - IP 白名单包含当前服务器。
 - 确认文本和审计日志正常。
@@ -209,11 +209,11 @@ live 前必须逐项确认：
 
 ### 能不能让 AI 直接调用 Tiger 下单？
 
-不能。AI 只能创建订单草稿。真实下单必须经过 OpenBroker 的确认接口。
+不能。AI 只能创建订单草稿。真实下单必须经过 BrokerGate 的确认接口。
 
 ### paper account 和 live account 怎么切？
 
-用 `OPENBROKER_BROKER_MODE` 和 `OPENBROKER_TIGER_ACCOUNT` 同时控制。不要只换账户号而不换模式。
+用 `BROKERGATE_BROKER_MODE` 和 `BROKERGATE_TIGER_ACCOUNT` 同时控制。不要只换账户号而不换模式。
 
 ### token 过期怎么办？
 

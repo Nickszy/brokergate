@@ -1,7 +1,9 @@
+﻿import asyncio
+
 from fastapi import Depends, FastAPI, Header, HTTPException, status
 
-from openbroker.config import settings
-from openbroker.models import (
+from brokergate.config import settings
+from brokergate.models import (
     AccountSummary,
     AuditEvent,
     BrokerId,
@@ -10,11 +12,11 @@ from openbroker.models import (
     Position,
     TradeOrderRequest,
 )
-from openbroker.services import workflow
-from openbroker.storage import store
+from brokergate.services import workflow
+from brokergate.storage import store
 
 app = FastAPI(
-    title="OpenBroker API",
+    title="BrokerGate API",
     summary="Self-hosted multi-broker trading gateway with human-confirmed execution.",
     version="0.1.0",
 )
@@ -32,14 +34,58 @@ async def health() -> dict[str, str]:
 
 
 @app.get("/v1/brokers", dependencies=[Depends(require_api_key)])
-async def brokers() -> dict[str, list[dict[str, str]]]:
+async def brokers() -> dict[str, list[dict[str, object]]]:
     return {
         "brokers": [
-            {"id": BrokerId.tiger, "status": "paper-ready"},
-            {"id": BrokerId.futu, "status": "planned"},
-            {"id": BrokerId.longbridge, "status": "paper-ready"},
+            await broker_status(BrokerId.tiger, settings.tiger_account),
+            {"id": BrokerId.futu, "status": "planned", "registered": False, "connected": False},
+            await broker_status(BrokerId.longbridge, settings.longbridge_account),
         ]
     }
+
+
+async def broker_status(broker: BrokerId, account_id: str) -> dict[str, object]:
+    adapter = workflow.adapters.get(broker)
+    if adapter is None:
+        return {"id": broker, "status": "planned", "registered": False, "connected": False}
+
+    adapter_name = adapter.__class__.__name__
+    is_local_paper = adapter_name.endswith("PaperAdapter")
+    try:
+        connected = await asyncio.wait_for(
+            asyncio.to_thread(lambda: asyncio.run(adapter.test_connection(account_id))),
+            timeout=5,
+        )
+        error = None
+    except TimeoutError:
+        connected = False
+        error = "connection test timed out"
+    except Exception as exc:
+        connected = False
+        error = str(exc)
+
+    if connected and is_local_paper:
+        status_value = "local-paper-ready"
+    elif connected and settings.broker_mode == "paper":
+        status_value = "broker-paper-ready"
+    elif connected and settings.broker_mode == "live-trade":
+        status_value = "trade-ready"
+    elif connected:
+        status_value = "query-ready"
+    else:
+        status_value = "connection-failed"
+
+    result: dict[str, object] = {
+        "id": broker,
+        "status": status_value,
+        "registered": True,
+        "connected": connected,
+        "adapter": adapter_name,
+        "broker_mode": settings.broker_mode,
+    }
+    if error:
+        result["error"] = error
+    return result
 
 
 @app.post("/v1/orders/drafts", dependencies=[Depends(require_api_key)])
@@ -75,4 +121,3 @@ async def list_positions(account_id: str, broker: BrokerId = BrokerId.tiger) -> 
     if not adapter:
         raise HTTPException(status.HTTP_501_NOT_IMPLEMENTED, detail="Broker adapter not available")
     return await adapter.list_positions(account_id)
-

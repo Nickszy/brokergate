@@ -1,28 +1,28 @@
-import sys
+﻿import sys
 from pathlib import Path
 
-# Add src to python path so we can import openbroker
+# Add src to python path so we can import brokergate
 sys.path.append(str(Path(__file__).parent.parent / "src"))
 
-from openbroker.config import settings
-from openbroker.adapters.tiger import TigerOpenApiAdapter
+from brokergate.config import settings
+from brokergate.adapters.tiger import TigerOpenApiAdapter
 
 
 def main():
     print("=== Tiger OpenAPI Connection Check ===")
-    print(f"OPENBROKER_TIGER_ENABLED: {settings.tiger_enabled}")
-    print(f"OPENBROKER_TIGER_ACCOUNT: {settings.tiger_account}")
-    print(f"OPENBROKER_TIGER_ID: {settings.tiger_id}")
-    print(f"OPENBROKER_TIGER_LICENSE: {settings.tiger_license}")
-    print(f"OPENBROKER_TIGER_CONFIG_DIR: {settings.tiger_config_dir}")
-    print(f"OPENBROKER_TIGER_PRIVATE_KEY_PATH: {settings.tiger_private_key_path}")
-    print(f"OPENBROKER_TIGER_TOKEN_PATH: {settings.tiger_token_path}")
-    print(f"OPENBROKER_BROKER_MODE: {settings.broker_mode}")
+    print(f"BROKERGATE_TIGER_ENABLED: {settings.tiger_enabled}")
+    print(f"BROKERGATE_TIGER_ACCOUNT: {settings.tiger_account}")
+    print(f"BROKERGATE_TIGER_ID: {settings.tiger_id}")
+    print(f"BROKERGATE_TIGER_LICENSE: {settings.tiger_license}")
+    print(f"BROKERGATE_TIGER_CONFIG_DIR: {settings.tiger_config_dir}")
+    print(f"BROKERGATE_TIGER_PRIVATE_KEY_PATH: {settings.tiger_private_key_path}")
+    print(f"BROKERGATE_TIGER_TOKEN_PATH: {settings.tiger_token_path}")
+    print(f"BROKERGATE_BROKER_MODE: {settings.broker_mode}")
     print("---------------------------------------")
 
     if not settings.tiger_enabled:
-        print("Warning: Tiger OpenAPI is not enabled in settings (OPENBROKER_TIGER_ENABLED is False).")
-        print("Enable it by setting OPENBROKER_TIGER_ENABLED=true in your .env file.")
+        print("Warning: Tiger OpenAPI is not enabled in settings (BROKERGATE_TIGER_ENABLED is False).")
+        print("Enable it by setting BROKERGATE_TIGER_ENABLED=true in your .env file.")
 
     adapter = TigerOpenApiAdapter()
 

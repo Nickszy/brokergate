@@ -1,14 +1,14 @@
-from fastapi import HTTPException, status
+﻿from fastapi import HTTPException, status
 
-from openbroker.adapters import (
+from brokergate.adapters import (
     BrokerAdapter,
     TigerPaperAdapter,
     TigerOpenApiAdapter,
     LongbridgePaperAdapter,
     LongbridgeOpenApiAdapter,
 )
-from openbroker.config import settings
-from openbroker.models import (
+from brokergate.config import settings
+from brokergate.models import (
     AuditEvent,
     BrokerId,
     BrokerOrderReceipt,
@@ -17,8 +17,8 @@ from openbroker.models import (
     OrderStatus,
     TradeOrderRequest,
 )
-from openbroker.risk import RiskEngine, risk_engine
-from openbroker.storage import InMemoryStore, store
+from brokergate.risk import RiskEngine, risk_engine
+from brokergate.storage import InMemoryStore, store
 
 
 class OrderWorkflow:
@@ -37,7 +37,29 @@ class OrderWorkflow:
         if adapter is None:
             raise HTTPException(status.HTTP_501_NOT_IMPLEMENTED, detail="Broker adapter not available")
 
-        account_summary = await adapter.get_account_summary(request.account_id, currency=request.currency)
+        try:
+            account_summary = await adapter.get_account_summary(
+                request.account_id,
+                currency=request.currency,
+            )
+        except Exception as exc:
+            self.store.append_audit(
+                AuditEvent(
+                    actor=actor,
+                    action="account.snapshot_failed",
+                    subject=f"{request.broker}:{request.account_id}",
+                    details={"broker": request.broker, "account_id": request.account_id, "error": str(exc)},
+                )
+            )
+            raise HTTPException(
+                status.HTTP_502_BAD_GATEWAY,
+                detail={
+                    "message": "Broker account snapshot failed",
+                    "broker": request.broker,
+                    "account_id": request.account_id,
+                    "error": str(exc),
+                },
+            ) from exc
         risk_checks = self.risk_engine.evaluate_order(request, account_summary)
         blocked_checks = [check for check in risk_checks if check.status == "blocked"]
         if blocked_checks:
@@ -98,7 +120,32 @@ class OrderWorkflow:
                 details={"confirmation_text": confirmation.confirmation_text},
             )
         )
-        receipt = await adapter.submit_order(draft)
+        try:
+            receipt = await adapter.submit_order(draft)
+        except Exception as exc:
+            draft.status = OrderStatus.rejected
+            self.store.save_draft(draft)
+            self.store.append_audit(
+                AuditEvent(
+                    actor=confirmation.confirmed_by,
+                    action="order.submit_failed",
+                    subject=draft.id,
+                    details={
+                        "broker": draft.request.broker,
+                        "account_id": draft.request.account_id,
+                        "error": str(exc),
+                    },
+                )
+            )
+            raise HTTPException(
+                status.HTTP_502_BAD_GATEWAY,
+                detail={
+                    "message": "Broker order submission failed",
+                    "draft_id": draft.id,
+                    "broker": draft.request.broker,
+                    "error": str(exc),
+                },
+            ) from exc
         self.store.append_audit(
             AuditEvent(
                 actor=confirmation.confirmed_by,
@@ -128,12 +175,10 @@ class OrderWorkflow:
         return warnings
 
 
-if settings.broker_mode == "paper":
-    tiger_adapter: BrokerAdapter = TigerPaperAdapter()
-    longbridge_adapter: BrokerAdapter = LongbridgePaperAdapter()
-else:
-    tiger_adapter = TigerOpenApiAdapter() if settings.tiger_enabled else TigerPaperAdapter()
-    longbridge_adapter = LongbridgeOpenApiAdapter() if settings.longbridge_enabled else LongbridgePaperAdapter()
+tiger_adapter: BrokerAdapter = TigerOpenApiAdapter() if settings.tiger_enabled else TigerPaperAdapter()
+longbridge_adapter: BrokerAdapter = (
+    LongbridgeOpenApiAdapter() if settings.longbridge_enabled else LongbridgePaperAdapter()
+)
 
 workflow = OrderWorkflow(
     store=store,

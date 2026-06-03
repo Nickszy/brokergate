@@ -1,8 +1,8 @@
-# Multi-Broker Target Architecture
+﻿# Multi-Broker Target Architecture
 
 ## 核心判断
 
-OpenBroker 的架构核心不是“把多个券商 API 包一层统一 REST”，而是建立一个券商中立的交易控制平面：
+BrokerGate 的架构核心不是“把多个券商 API 包一层统一 REST”，而是建立一个券商中立的交易控制平面：
 
 ```text
 券商连接层 -> 统一账户/订单模型 -> 统一风控 -> 订单生命周期 -> 人工确认 -> 券商执行 -> 审计账本
@@ -112,7 +112,7 @@ Client / Web / AI / MCP
 每个券商 adapter 只负责三件事：
 
 1. 连接券商。
-2. 把券商事实归一化成 OpenBroker 模型。
+2. 把券商事实归一化成 BrokerGate 模型。
 3. 执行已经确认的订单。
 
 adapter 不负责：
@@ -245,7 +245,7 @@ MVP 只做目标架构的一小段：
 
 ## 架构 ADR
 
-### ADR-001: 风控放在 OpenBroker 统一层，不放在 broker adapter
+### ADR-001: 风控放在 BrokerGate 统一层，不放在 broker adapter
 
 决定：adapter 只提供账户事实和执行能力，RiskEngine 统一判断订单是否允许。
 
@@ -289,15 +289,15 @@ MVP 只做目标架构的一小段：
 - MVP 交易类型更窄。
 - 用户需要先用限价单验证流程。
 
-### ADR-004: 长桥 hosted MCP 不作为 OpenBroker 交易后端
+### ADR-004: 长桥 hosted MCP 不作为 BrokerGate 交易后端
 
-决定：长桥官方 hosted MCP 可以作为用户调研、只读体验和工具命名参考，但 OpenBroker 不通过它执行交易。
+决定：长桥官方 hosted MCP 可以作为用户调研、只读体验和工具命名参考，但 BrokerGate 不通过它执行交易。
 
 理由：
 
-- hosted MCP 的下单路径不经过 OpenBroker 的统一风控。
-- OAuth 凭证由 AI client 管理，审计边界不在 OpenBroker 内。
-- OpenBroker 的定位是自部署交易控制平面，而不是 MCP 转发器。
+- hosted MCP 的下单路径不经过 BrokerGate 的统一风控。
+- OAuth 凭证由 AI client 管理，审计边界不在 BrokerGate 内。
+- BrokerGate 的定位是自部署交易控制平面，而不是 MCP 转发器。
 
 代价：
 

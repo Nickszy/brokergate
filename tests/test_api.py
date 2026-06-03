@@ -1,9 +1,10 @@
-import os
-os.environ["OPENBROKER_TIGER_ENABLED"] = "false"
+﻿import os
+os.environ["BROKERGATE_TIGER_ENABLED"] = "false"
+os.environ["BROKERGATE_LONGBRIDGE_ENABLED"] = "false"
 
 from fastapi.testclient import TestClient
 
-from openbroker.main import app
+from brokergate.main import app
 
 
 client = TestClient(app)
@@ -13,6 +14,21 @@ def test_health() -> None:
     response = client.get("/health")
     assert response.status_code == 200
     assert response.json()["status"] == "ok"
+
+
+def test_brokers_returns_dynamic_registration_status() -> None:
+    response = client.get("/v1/brokers")
+    assert response.status_code == 200
+    brokers = {item["id"]: item for item in response.json()["brokers"]}
+
+    assert brokers["tiger"]["registered"] is True
+    assert brokers["tiger"]["connected"] is True
+    assert brokers["tiger"]["status"] == "local-paper-ready"
+    assert brokers["longbridge"]["registered"] is True
+    assert brokers["longbridge"]["connected"] is True
+    assert brokers["longbridge"]["status"] == "local-paper-ready"
+    assert brokers["futu"]["registered"] is False
+    assert brokers["futu"]["status"] == "planned"
 
 
 def test_create_and_confirm_order_draft() -> None:
@@ -192,4 +208,3 @@ def test_longbridge_list_positions() -> None:
     assert pos["quantity"] == "100"
     assert pos["market_value"] is None
     assert pos["cost_basis"] == "380"
-

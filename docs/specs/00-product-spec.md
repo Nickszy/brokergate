@@ -1,8 +1,8 @@
-# Product Spec
+﻿# Product Spec
 
 ## 定位
 
-OpenBroker 是开源、自部署、多券商交易网关。它提供统一 API、基础 Web 配置、人工确认下单、安全审计，以及后续 MCP / Claude / OpenClaw 集成能力。
+BrokerGate 是开源、自部署、多券商交易网关。它提供统一 API、基础 Web 配置、人工确认下单、安全审计，以及后续 MCP / Claude / OpenClaw 集成能力。
 
 它不是自动荐股或自动炒股产品。产品红线是：AI 可以查询账户、生成交易草稿和解释风险，但不能绕过用户确认直接执行交易。
 

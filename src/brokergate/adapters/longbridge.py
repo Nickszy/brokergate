@@ -1,9 +1,9 @@
-from uuid import uuid4
+﻿from uuid import uuid4
 from decimal import Decimal
 from typing import Any
 
-from openbroker.adapters.base import BrokerAdapter
-from openbroker.models import AccountSummary, BrokerId, BrokerOrderReceipt, OrderDraft, OrderStatus, Position
+from brokergate.adapters.base import BrokerAdapter
+from brokergate.models import AccountSummary, BrokerId, BrokerOrderReceipt, OrderDraft, OrderStatus, Position
 
 
 class LongbridgePaperAdapter(BrokerAdapter):
@@ -58,17 +58,17 @@ class LongbridgeOpenApiAdapter(BrokerAdapter):
     broker_id = BrokerId.longbridge
 
     def _get_longbridge_config(self) -> Any:
-        from openbroker.config import settings
+        from brokergate.config import settings
         from longbridge.openapi import Config
 
-        # Fallback to SDK-native environment variables if openbroker-specific settings are not provided
+        # Fallback to SDK-native environment variables if brokergate-specific settings are not provided
         if not settings.longbridge_app_key and not settings.longbridge_app_secret:
             try:
                 return Config.from_apikey_env()
             except Exception as e:
                 raise ValueError(
                     "Longbridge configuration credentials are not set. "
-                    "Please configure either OPENBROKER_LONGBRIDGE_* settings in .env or the SDK-native LONGBRIDGE_* environment variables."
+                    "Please configure either BROKERGATE_LONGBRIDGE_* settings in .env or the SDK-native LONGBRIDGE_* environment variables."
                 ) from e
 
         kwargs = {}
@@ -84,14 +84,19 @@ class LongbridgeOpenApiAdapter(BrokerAdapter):
         return config
 
     def _to_dict(self, obj: Any) -> Any:
-        if isinstance(obj, list):
+        if obj.__class__.__module__.startswith("unittest.mock"):
+            return str(obj)
+        if isinstance(obj, (int, float, str, bool)) or obj is None:
+            return obj
+        if isinstance(obj, (list, tuple)):
             return [self._to_dict(item) for item in obj]
         if isinstance(obj, dict):
             return {k: self._to_dict(v) for k, v in obj.items()}
-        if hasattr(obj, "__dict__"):
-            return {k: self._to_dict(v) for k, v in obj.__dict__.items() if not k.startswith("_")}
-        if isinstance(obj, (int, float, str, bool)) or obj is None:
-            return obj
+        if hasattr(obj, "model_dump"):
+            return self._to_dict(obj.model_dump())
+        obj_dict = getattr(obj, "__dict__", None)
+        if isinstance(obj_dict, dict):
+            return {k: self._to_dict(v) for k, v in obj_dict.items() if not k.startswith("_")}
         return str(obj)
 
     async def test_connection(self, account_id: str) -> bool:
@@ -106,7 +111,7 @@ class LongbridgeOpenApiAdapter(BrokerAdapter):
 
     async def get_account_summary(self, account_id: str, currency: str | None = None) -> AccountSummary:
         from longbridge.openapi import TradeContext
-        from openbroker.config import settings
+        from brokergate.config import settings
 
         if account_id != settings.longbridge_account:
             raise ValueError(f"Account mismatch: requested account {account_id} does not match configured Longbridge account {settings.longbridge_account}")
@@ -153,14 +158,14 @@ class LongbridgeOpenApiAdapter(BrokerAdapter):
                 base_currency=base_currency,
                 cash=cash,
                 buying_power=buying_power,
-                raw={"balances": self._to_dict(balances)},
+                raw={"balances": str(balances)},
             )
         except Exception as e:
             raise RuntimeError(f"Failed to get account summary from Longbridge: {str(e)}") from e
 
     async def list_positions(self, account_id: str) -> list[Position]:
         from longbridge.openapi import TradeContext
-        from openbroker.config import settings
+        from brokergate.config import settings
 
         if account_id != settings.longbridge_account:
             raise ValueError(f"Account mismatch: requested account {account_id} does not match configured Longbridge account {settings.longbridge_account}")
@@ -202,7 +207,7 @@ class LongbridgeOpenApiAdapter(BrokerAdapter):
 
     async def list_orders(self, account_id: str) -> list[BrokerOrderReceipt]:
         from longbridge.openapi import TradeContext
-        from openbroker.config import settings
+        from brokergate.config import settings
 
         if account_id != settings.longbridge_account:
             raise ValueError(f"Account mismatch: requested account {account_id} does not match configured Longbridge account {settings.longbridge_account}")
@@ -232,7 +237,7 @@ class LongbridgeOpenApiAdapter(BrokerAdapter):
                         broker=BrokerId.longbridge,
                         broker_order_id=str(order.order_id) if order.order_id else "",
                         status=status,
-                        raw=self._to_dict(order)
+                        raw={"order": self._to_dict(order)}
                     )
                 )
             return receipts
@@ -241,10 +246,13 @@ class LongbridgeOpenApiAdapter(BrokerAdapter):
 
     async def submit_order(self, draft: OrderDraft) -> BrokerOrderReceipt:
         from longbridge.openapi import TradeContext, OrderType as LBOrderType, OrderSide as LBOrderSide, TimeInForceType
-        from openbroker.config import settings
+        from brokergate.config import settings
 
-        if settings.broker_mode != "live-trade":
-            raise ValueError(f"Longbridge adapter cannot submit order when broker_mode is '{settings.broker_mode}'. Must be 'live-trade'.")
+        if settings.broker_mode not in ("paper", "live-trade"):
+            raise ValueError(
+                "Longbridge adapter can only submit orders in broker paper or live-trade mode; "
+                f"current broker_mode is '{settings.broker_mode}'."
+            )
 
         if draft.request.account_id != settings.longbridge_account:
             raise ValueError(f"Account mismatch: draft account {draft.request.account_id} does not match adapter account {settings.longbridge_account}")
@@ -271,7 +279,7 @@ class LongbridgeOpenApiAdapter(BrokerAdapter):
                 submitted_quantity=quantity,
                 time_in_force=TimeInForceType.Day,
                 submitted_price=submitted_price,
-                remark=draft.request.client_memo or "OpenBroker Trade"
+                remark=draft.request.client_memo or "BrokerGate Trade"
             )
 
             if not resp or not resp.order_id:
@@ -281,7 +289,7 @@ class LongbridgeOpenApiAdapter(BrokerAdapter):
                 broker=BrokerId.longbridge,
                 broker_order_id=str(resp.order_id),
                 status=OrderStatus.submitted,
-                raw=self._to_dict(resp),
+                raw={"response": self._to_dict(resp)},
             )
         except Exception as e:
             raise RuntimeError(f"Failed to submit order to Longbridge OpenAPI: {str(e)}") from e

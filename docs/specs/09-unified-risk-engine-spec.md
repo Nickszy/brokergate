@@ -1,8 +1,8 @@
-# Unified Risk Engine Spec
+﻿# Unified Risk Engine Spec
 
 ## 结论
 
-多券商接入不能让每个券商 adapter 自己做风控。OpenBroker 应该把 Tiger、Futu、Longbridge 的账户信息先归一化为同一份 `AccountSummary`，再由统一 `RiskEngine` 执行交易前检查。
+多券商接入不能让每个券商 adapter 自己做风控。BrokerGate 应该把 Tiger、Futu、Longbridge 的账户信息先归一化为同一份 `AccountSummary`，再由统一 `RiskEngine` 执行交易前检查。
 
 首版只有一条规则：
 
@@ -18,7 +18,7 @@
 
 ```text
 Client / Web / AI
-  -> OpenBroker API
+  -> BrokerGate API
   -> Order Workflow
   -> Broker Adapter Registry
   -> Broker Adapter refreshes AccountSummary
@@ -185,7 +185,7 @@ Order Workflow = 保证顺序
 
 当前 MVP 代码已经有：
 
-- `src/openbroker/risk.py`：统一风控引擎。
+- `src/brokergate/risk.py`：统一风控引擎。
 - `AccountSummary`：统一账户快照。
 - `RiskCheckResult`：风控结果。
 - `TigerPaperAdapter.get_account_summary()`：paper 账户购买力占位。

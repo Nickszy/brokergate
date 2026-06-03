@@ -1,8 +1,8 @@
-# MCP and AI Integration Spec
+﻿# MCP and AI Integration Spec
 
 ## 定位
 
-OpenBroker 的 AI 集成不是让模型自动炒股，而是让模型成为账户查询、交易草稿生成和复盘分析的辅助入口。
+BrokerGate 的 AI 集成不是让模型自动炒股，而是让模型成为账户查询、交易草稿生成和复盘分析的辅助入口。
 
 ## 首版 MCP 能力
 
@@ -37,7 +37,7 @@ MCP 首版不提供：
 
 ## 与 OpenClaw / Claude / Codex 的关系
 
-OpenBroker 提供标准 REST API 和 MCP Server。Claude、Codex、OpenClaw、Cursor 等工具可以接入，但交易执行仍然回到 OpenBroker 的确认流程。
+BrokerGate 提供标准 REST API 和 MCP Server。Claude、Codex、OpenClaw、Cursor 等工具可以接入，但交易执行仍然回到 BrokerGate 的确认流程。
 
 ## AI 账户分析 Pro
 

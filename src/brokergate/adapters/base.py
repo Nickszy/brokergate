@@ -1,6 +1,6 @@
-from abc import ABC, abstractmethod
+﻿from abc import ABC, abstractmethod
 
-from openbroker.models import AccountSummary, BrokerId, BrokerOrderReceipt, OrderDraft, Position
+from brokergate.models import AccountSummary, BrokerId, BrokerOrderReceipt, OrderDraft, Position
 
 
 class BrokerAdapter(ABC):

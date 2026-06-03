@@ -1,9 +1,9 @@
-from uuid import uuid4
+﻿from uuid import uuid4
 from decimal import Decimal
 from typing import Any
 
-from openbroker.adapters.base import BrokerAdapter
-from openbroker.models import AccountSummary, BrokerId, BrokerOrderReceipt, OrderDraft, OrderStatus, Position
+from brokergate.adapters.base import BrokerAdapter
+from brokergate.models import AccountSummary, BrokerId, BrokerOrderReceipt, OrderDraft, OrderStatus, Position
 
 
 class TigerPaperAdapter(BrokerAdapter):
@@ -57,7 +57,7 @@ class TigerOpenApiAdapter(BrokerAdapter):
     broker_id = BrokerId.tiger
 
     def _get_tiger_config(self) -> Any:
-        from openbroker.config import settings
+        from brokergate.config import settings
         from pathlib import Path
         from tigeropen.tiger_open_config import TigerOpenClientConfig
         
@@ -203,7 +203,7 @@ class TigerOpenApiAdapter(BrokerAdapter):
                         broker=BrokerId.tiger,
                         broker_order_id=str(order.id) if order.id else "",
                         status=status,
-                        raw=self._to_dict(order)
+                        raw={"order": self._to_dict(order)}
                     )
                 )
             return receipts
@@ -214,11 +214,13 @@ class TigerOpenApiAdapter(BrokerAdapter):
         from tigeropen.trade.trade_client import TradeClient
         from tigeropen.common.util.contract_utils import stock_contract
         from tigeropen.common.util.order_utils import limit_order
-        from openbroker.config import settings
+        from brokergate.config import settings
 
-        # P0: Mode boundary protection check
-        if settings.broker_mode != "live-trade":
-            raise ValueError(f"Tiger adapter cannot submit order when broker_mode is '{settings.broker_mode}'. Must be 'live-trade'.")
+        if settings.broker_mode not in ("paper", "live-trade"):
+            raise ValueError(
+                "Tiger adapter can only submit orders in broker paper or live-trade mode; "
+                f"current broker_mode is '{settings.broker_mode}'."
+            )
 
         if draft.status != OrderStatus.confirmed:
             raise ValueError("Tiger adapter only accepts confirmed order drafts")
@@ -230,6 +232,11 @@ class TigerOpenApiAdapter(BrokerAdapter):
             # P0: Account mismatch protection check
             if draft.request.account_id != config.account:
                 raise ValueError(f"Account mismatch: draft account {draft.request.account_id} does not match adapter account {config.account}")
+
+            if settings.broker_mode == "paper" and draft.request.account_id != settings.tiger_account:
+                raise ValueError(
+                    "Tiger broker paper mode only allows the configured Tiger paper account."
+                )
 
             # P1: Quantity integrity check
             if draft.request.quantity % 1 != 0:
@@ -264,7 +271,7 @@ class TigerOpenApiAdapter(BrokerAdapter):
                 broker=BrokerId.tiger,
                 broker_order_id=str(order.id),
                 status=OrderStatus.submitted,
-                raw=self._to_dict(order),
+                raw={"order": self._to_dict(order)},
             )
         except Exception as e:
             raise RuntimeError(f"Failed to submit order to Tiger OpenAPI: {str(e)}") from e

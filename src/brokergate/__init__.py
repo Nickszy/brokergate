@@ -1,4 +1,4 @@
-"""OpenBroker application package."""
+﻿"""BrokerGate application package."""
 
 __all__ = ["__version__"]
 

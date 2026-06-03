@@ -1,8 +1,8 @@
-from unittest.mock import MagicMock, patch
+﻿from unittest.mock import MagicMock, patch
 import pytest
 from decimal import Decimal
-from openbroker.adapters.tiger import TigerOpenApiAdapter
-from openbroker.models import OrderDraft, TradeOrderRequest, OrderSide, OrderType, OrderStatus
+from brokergate.adapters.tiger import TigerOpenApiAdapter
+from brokergate.models import OrderDraft, TradeOrderRequest, OrderSide, OrderType, OrderStatus
 
 
 @patch("tigeropen.trade.trade_client.TradeClient")
@@ -88,8 +88,8 @@ async def test_tiger_adapter_submit_order(mock_config_cls, mock_client_cls):
 
     with patch("tigeropen.common.util.contract_utils.stock_contract") as mock_stock_contract, \
          patch("tigeropen.common.util.order_utils.limit_order") as mock_limit_order, \
-         patch("openbroker.config.settings.broker_mode", "live-trade"), \
-         patch("openbroker.config.settings.tiger_account", "U12345"):
+         patch("brokergate.config.settings.broker_mode", "live-trade"), \
+         patch("brokergate.config.settings.tiger_account", "U12345"):
 
         mock_contract_obj = MagicMock()
         mock_stock_contract.return_value = mock_contract_obj

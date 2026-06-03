@@ -1,8 +1,8 @@
-# API Spec
+﻿# API Spec
 
 ## 认证
 
-首版使用 `X-API-Key`。当 `.env` 中 `OPENBROKER_API_KEY=change-me` 时，本地开发允许跳过校验；生产部署必须改为强随机密钥。
+首版使用 `X-API-Key`。当 `.env` 中 `BROKERGATE_API_KEY=change-me` 时，本地开发允许跳过校验；生产部署必须改为强随机密钥。
 
 后续版本增加：
 

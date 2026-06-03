@@ -1,4 +1,4 @@
-# Architecture Spec
+﻿# Architecture Spec
 
 ## 架构目标
 
@@ -10,7 +10,7 @@
 
 ```text
 Client / AI Agent / Web Panel
-  -> OpenBroker REST API
+  -> BrokerGate REST API
   -> Auth and safety middleware
   -> Order workflow
   -> Unified risk engine
@@ -30,12 +30,12 @@ Client / AI Agent / Web Panel
 
 ## 当前代码骨架
 
-- `src/openbroker/main.py`：FastAPI 入口。
-- `src/openbroker/models.py`：统一请求、订单、审计模型。
-- `src/openbroker/services.py`：订单工作流。
-- `src/openbroker/risk.py`：统一风控引擎。
-- `src/openbroker/adapters/`：券商适配器接口和 Tiger paper 占位实现。
-- `src/openbroker/storage.py`：MVP 内存存储，后续替换为数据库。
+- `src/brokergate/main.py`：FastAPI 入口。
+- `src/brokergate/models.py`：统一请求、订单、审计模型。
+- `src/brokergate/services.py`：订单工作流。
+- `src/brokergate/risk.py`：统一风控引擎。
+- `src/brokergate/adapters/`：券商适配器接口和 Tiger paper 占位实现。
+- `src/brokergate/storage.py`：MVP 内存存储，后续替换为数据库。
 
 ## 后续持久化
 

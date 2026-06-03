@@ -1,18 +1,18 @@
-import time
+﻿import time
 import subprocess
 import httpx
 
 
 def main():
-    print("=== Testing OpenBroker API via User HTTP Requests ===")
+    print("=== Testing BrokerGate API via User HTTP Requests ===")
 
     # 1. Start the uvicorn server as a subprocess (let output print directly to console)
     server_process = subprocess.Popen(
-        ["uv", "run", "uvicorn", "openbroker.main:app", "--port", "8085", "--host", "127.0.0.1"]
+        ["uv", "run", "uvicorn", "brokergate.main:app", "--port", "8085", "--host", "127.0.0.1"]
     )
 
     # Wait for the server to spin up
-    print("Starting OpenBroker API server...")
+    print("Starting BrokerGate API server...")
     time.sleep(3)
 
     client = httpx.Client(base_url="http://127.0.0.1:8085", timeout=30.0)
@@ -38,7 +38,7 @@ def main():
     except Exception as e:
         print(f"Error during API requests: {e}")
     finally:
-        print("\nStopping OpenBroker API server...")
+        print("\nStopping BrokerGate API server...")
         server_process.terminate()
         server_process.wait()
         print("Server stopped.")

@@ -1,8 +1,8 @@
-from unittest.mock import MagicMock, patch
+﻿from unittest.mock import MagicMock, patch
 import pytest
 from decimal import Decimal
-from openbroker.adapters.longbridge import LongbridgeOpenApiAdapter
-from openbroker.models import OrderDraft, TradeOrderRequest, OrderSide, OrderType, OrderStatus
+from brokergate.adapters.longbridge import LongbridgeOpenApiAdapter
+from brokergate.models import OrderDraft, TradeOrderRequest, OrderSide, OrderType, OrderStatus
 
 
 @patch("longbridge.openapi.TradeContext")
@@ -18,7 +18,7 @@ async def test_longbridge_adapter_get_account_summary(mock_config_cls, mock_ctx_
     mock_ctx.account_balance.return_value = [mock_bal]
 
     adapter = LongbridgeOpenApiAdapter()
-    with patch("openbroker.config.settings.longbridge_account", "LB12345"):
+    with patch("brokergate.config.settings.longbridge_account", "LB12345"):
         summary = await adapter.get_account_summary("LB12345")
 
     assert summary.cash == Decimal("54321.1")
@@ -49,7 +49,7 @@ async def test_longbridge_adapter_list_positions(mock_config_cls, mock_ctx_cls):
     mock_ctx.stock_positions.return_value = mock_resp
 
     adapter = LongbridgeOpenApiAdapter()
-    with patch("openbroker.config.settings.longbridge_account", "LB12345"):
+    with patch("brokergate.config.settings.longbridge_account", "LB12345"):
         positions = await adapter.list_positions("LB12345")
 
     assert len(positions) == 1
@@ -75,7 +75,7 @@ async def test_longbridge_adapter_list_orders(mock_config_cls, mock_ctx_cls):
 
     adapter = LongbridgeOpenApiAdapter()
 
-    with patch("openbroker.config.settings.longbridge_account", "LB12345"):
+    with patch("brokergate.config.settings.longbridge_account", "LB12345"):
         orders = await adapter.list_orders("LB12345")
         assert len(orders) == 1
         assert orders[0].broker_order_id == "lb-order-123"
@@ -112,8 +112,8 @@ async def test_longbridge_adapter_submit_order(mock_config_cls, mock_ctx_cls):
 
     from longbridge.openapi import OrderType as LBOrderType, OrderSide as LBOrderSide, TimeInForceType
 
-    with patch("openbroker.config.settings.broker_mode", "live-trade"), \
-         patch("openbroker.config.settings.longbridge_account", "LB12345"):
+    with patch("brokergate.config.settings.broker_mode", "live-trade"), \
+         patch("brokergate.config.settings.longbridge_account", "LB12345"):
 
         receipt = await adapter.submit_order(draft)
 
@@ -127,5 +127,5 @@ async def test_longbridge_adapter_submit_order(mock_config_cls, mock_ctx_cls):
             submitted_quantity=Decimal("100"),
             time_in_force=TimeInForceType.Day,
             submitted_price=Decimal("350.0"),
-            remark="OpenBroker Trade"
+            remark="BrokerGate Trade"
         )

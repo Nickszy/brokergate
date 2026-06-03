@@ -1,21 +1,21 @@
-import sys
+﻿import sys
 from pathlib import Path
 
-# Add src to python path so we can import openbroker
+# Add src to python path so we can import brokergate
 sys.path.append(str(Path(__file__).parent.parent / "src"))
 
-from openbroker.config import settings
-from openbroker.adapters.longbridge import LongbridgeOpenApiAdapter
+from brokergate.config import settings
+from brokergate.adapters.longbridge import LongbridgeOpenApiAdapter
 
 
 def main():
     print("=== Longbridge OpenAPI Connection Check ===")
-    print(f"OPENBROKER_LONGBRIDGE_ENABLED: {settings.longbridge_enabled}")
-    print(f"OPENBROKER_LONGBRIDGE_ACCOUNT: {settings.longbridge_account}")
-    print(f"OPENBROKER_LONGBRIDGE_APP_KEY: {settings.longbridge_app_key}")
-    print(f"OPENBROKER_LONGBRIDGE_APP_SECRET: {settings.longbridge_app_secret[:6]}... (hidden)")
-    print(f"OPENBROKER_LONGBRIDGE_ACCESS_TOKEN: {settings.longbridge_access_token[:15]}... (hidden)")
-    print(f"OPENBROKER_BROKER_MODE: {settings.broker_mode}")
+    print(f"BROKERGATE_LONGBRIDGE_ENABLED: {settings.longbridge_enabled}")
+    print(f"BROKERGATE_LONGBRIDGE_ACCOUNT: {settings.longbridge_account}")
+    print(f"BROKERGATE_LONGBRIDGE_APP_KEY: {settings.longbridge_app_key}")
+    print(f"BROKERGATE_LONGBRIDGE_APP_SECRET: {settings.longbridge_app_secret[:6]}... (hidden)")
+    print(f"BROKERGATE_LONGBRIDGE_ACCESS_TOKEN: {settings.longbridge_access_token[:15]}... (hidden)")
+    print(f"BROKERGATE_BROKER_MODE: {settings.broker_mode}")
     print("-------------------------------------------")
 
     if not settings.longbridge_enabled:
