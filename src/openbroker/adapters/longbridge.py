@@ -60,6 +60,16 @@ class LongbridgeOpenApiAdapter(BrokerAdapter):
         from openbroker.config import settings
         from longbridge.openapi import Config
 
+        # Fallback to SDK-native environment variables if openbroker-specific settings are not provided
+        if not settings.longbridge_app_key and not settings.longbridge_app_secret:
+            try:
+                return Config.from_apikey_env()
+            except Exception as e:
+                raise ValueError(
+                    "Longbridge configuration credentials are not set. "
+                    "Please configure either OPENBROKER_LONGBRIDGE_* settings in .env or the SDK-native LONGBRIDGE_* environment variables."
+                ) from e
+
         kwargs = {}
         if settings.longbridge_http_url:
             kwargs["http_url"] = settings.longbridge_http_url
