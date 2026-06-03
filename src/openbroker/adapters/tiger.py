@@ -12,7 +12,7 @@ class TigerPaperAdapter(BrokerAdapter):
     async def test_connection(self, account_id: str) -> bool:
         return True
 
-    async def get_account_summary(self, account_id: str) -> AccountSummary:
+    async def get_account_summary(self, account_id: str, currency: str | None = None) -> AccountSummary:
         return AccountSummary(
             broker=BrokerId.tiger,
             account_id=account_id,
@@ -103,7 +103,7 @@ class TigerOpenApiAdapter(BrokerAdapter):
         except Exception:
             return False
 
-    async def get_account_summary(self, account_id: str) -> AccountSummary:
+    async def get_account_summary(self, account_id: str, currency: str | None = None) -> AccountSummary:
         from tigeropen.trade.trade_client import TradeClient
         try:
             config = self._get_tiger_config()

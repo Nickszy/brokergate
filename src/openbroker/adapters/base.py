@@ -11,7 +11,7 @@ class BrokerAdapter(ABC):
         """Test the connection to the broker."""
 
     @abstractmethod
-    async def get_account_summary(self, account_id: str) -> AccountSummary:
+    async def get_account_summary(self, account_id: str, currency: str | None = None) -> AccountSummary:
         """Return the broker account snapshot used by query APIs and risk checks."""
 
     @abstractmethod

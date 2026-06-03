@@ -123,6 +123,27 @@ def test_blocks_fractional_quantity() -> None:
     assert qty_check["status"] == "blocked"
 
 
+def test_blocks_symbol_currency_mismatch() -> None:
+    response = client.post(
+        "/v1/orders/drafts",
+        json={
+            "broker": "tiger",
+            "account_id": "paper-account",
+            "symbol": "700.HK",
+            "side": "buy",
+            "order_type": "limit",
+            "quantity": "10",
+            "limit_price": "100",
+            "currency": "USD",
+        },
+    )
+    assert response.status_code == 422
+    assert response.json()["detail"]["message"] == "Order blocked by risk engine"
+    checks = response.json()["detail"]["risk_checks"]
+    sym_currency_check = next(c for c in checks if c["rule_id"] == "symbol_currency_mismatch")
+    assert sym_currency_check["status"] == "blocked"
+
+
 def test_longbridge_create_and_confirm_order_draft() -> None:
     draft_response = client.post(
         "/v1/orders/drafts",
@@ -134,7 +155,7 @@ def test_longbridge_create_and_confirm_order_draft() -> None:
             "order_type": "limit",
             "quantity": "100",
             "limit_price": "350",
-            "currency": "USD",
+            "currency": "HKD",
         },
     )
 
@@ -169,6 +190,6 @@ def test_longbridge_list_positions() -> None:
     pos = data[0]
     assert pos["symbol"] == "700.HK"
     assert pos["quantity"] == "100"
-    assert pos["market_value"] == "40000"
+    assert pos["market_value"] is None
     assert pos["cost_basis"] == "380"
 

@@ -18,7 +18,8 @@ async def test_longbridge_adapter_get_account_summary(mock_config_cls, mock_ctx_
     mock_ctx.account_balance.return_value = [mock_bal]
 
     adapter = LongbridgeOpenApiAdapter()
-    summary = await adapter.get_account_summary("LB12345")
+    with patch("openbroker.config.settings.longbridge_account", "LB12345"):
+        summary = await adapter.get_account_summary("LB12345")
 
     assert summary.cash == Decimal("54321.1")
     assert summary.buying_power == Decimal("98765.2")
@@ -48,14 +49,15 @@ async def test_longbridge_adapter_list_positions(mock_config_cls, mock_ctx_cls):
     mock_ctx.stock_positions.return_value = mock_resp
 
     adapter = LongbridgeOpenApiAdapter()
-    positions = await adapter.list_positions("LB12345")
+    with patch("openbroker.config.settings.longbridge_account", "LB12345"):
+        positions = await adapter.list_positions("LB12345")
 
     assert len(positions) == 1
     pos = positions[0]
     assert pos.symbol == "700.HK"
     assert pos.name == "Tencent"
     assert pos.quantity == Decimal("200")
-    assert pos.market_value == Decimal("70000")
+    assert pos.market_value is None
     assert pos.cost_basis == Decimal("350")
     assert pos.currency == "HKD"
 
@@ -78,8 +80,8 @@ async def test_longbridge_adapter_list_orders(mock_config_cls, mock_ctx_cls):
         assert len(orders) == 1
         assert orders[0].broker_order_id == "lb-order-123"
 
-        orders_other = await adapter.list_orders("OTHER")
-        assert len(orders_other) == 0
+        with pytest.raises(ValueError):
+            await adapter.list_orders("OTHER")
 
 
 @patch("longbridge.openapi.TradeContext")
@@ -122,7 +124,7 @@ async def test_longbridge_adapter_submit_order(mock_config_cls, mock_ctx_cls):
             symbol="700.HK",
             order_type=LBOrderType.LO,
             side=LBOrderSide.Buy,
-            quantity=Decimal("100"),
+            submitted_quantity=Decimal("100"),
             time_in_force=TimeInForceType.Day,
             submitted_price=Decimal("350.0"),
             remark="OpenBroker Trade"

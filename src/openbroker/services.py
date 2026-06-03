@@ -37,7 +37,7 @@ class OrderWorkflow:
         if adapter is None:
             raise HTTPException(status.HTTP_501_NOT_IMPLEMENTED, detail="Broker adapter not available")
 
-        account_summary = await adapter.get_account_summary(request.account_id)
+        account_summary = await adapter.get_account_summary(request.account_id, currency=request.currency)
         risk_checks = self.risk_engine.evaluate_order(request, account_summary)
         blocked_checks = [check for check in risk_checks if check.status == "blocked"]
         if blocked_checks:

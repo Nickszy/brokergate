@@ -15,10 +15,27 @@ class RiskEngine:
         account_summary: AccountSummary,
     ) -> list[RiskCheckResult]:
         checks = []
+        checks.append(self._check_symbol_currency(request))
         checks.append(self._check_currency(request, account_summary))
         checks.append(self._check_quantity(request))
         checks.append(self._check_buying_power(request, account_summary))
         return checks
+
+    @staticmethod
+    def _check_symbol_currency(request: TradeOrderRequest) -> RiskCheckResult:
+        symbol_upper = request.symbol.upper()
+        expected_currency = "HKD" if symbol_upper.endswith(".HK") else "USD"
+        if request.currency.upper() != expected_currency:
+            return RiskCheckResult(
+                rule_id="symbol_currency_mismatch",
+                status=RiskCheckStatus.blocked,
+                reason=f"Symbol market currency mismatch: symbol {request.symbol} requires currency {expected_currency}, but request specified {request.currency}.",
+            )
+        return RiskCheckResult(
+            rule_id="symbol_currency_mismatch",
+            status=RiskCheckStatus.passed,
+            reason="Request currency matches symbol market currency.",
+        )
 
     @staticmethod
     def _check_currency(

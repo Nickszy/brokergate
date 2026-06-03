@@ -101,7 +101,7 @@ class Position(BaseModel):
     symbol: str
     name: str | None = None
     quantity: Decimal
-    market_value: Decimal
+    market_value: Decimal | None = None
     currency: str = "USD"
     cost_basis: Decimal
     updated_at: datetime = Field(default_factory=lambda: datetime.now(UTC))

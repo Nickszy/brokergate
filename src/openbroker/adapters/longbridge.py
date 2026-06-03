@@ -12,11 +12,12 @@ class LongbridgePaperAdapter(BrokerAdapter):
     async def test_connection(self, account_id: str) -> bool:
         return True
 
-    async def get_account_summary(self, account_id: str) -> AccountSummary:
+    async def get_account_summary(self, account_id: str, currency: str | None = None) -> AccountSummary:
+        base_currency = currency.upper() if currency else "USD"
         return AccountSummary(
             broker=BrokerId.longbridge,
             account_id=account_id,
-            base_currency="USD",
+            base_currency=base_currency,
             cash=Decimal("100000"),
             buying_power=Decimal("100000"),
             raw={"mode": "paper"},
@@ -30,7 +31,7 @@ class LongbridgePaperAdapter(BrokerAdapter):
                 symbol="700.HK",
                 name="Tencent Holdings Ltd.",
                 quantity=Decimal("100"),
-                market_value=Decimal("40000"),
+                market_value=None,
                 currency="HKD",
                 cost_basis=Decimal("380"),
             )
@@ -103,8 +104,13 @@ class LongbridgeOpenApiAdapter(BrokerAdapter):
         except Exception:
             return False
 
-    async def get_account_summary(self, account_id: str) -> AccountSummary:
+    async def get_account_summary(self, account_id: str, currency: str | None = None) -> AccountSummary:
         from longbridge.openapi import TradeContext
+        from openbroker.config import settings
+
+        if account_id != settings.longbridge_account:
+            raise ValueError(f"Account mismatch: requested account {account_id} does not match configured Longbridge account {settings.longbridge_account}")
+
         try:
             config = self._get_longbridge_config()
             ctx = TradeContext(config)
@@ -114,17 +120,25 @@ class LongbridgeOpenApiAdapter(BrokerAdapter):
                 raise ValueError("No account balance retrieved from Longbridge")
 
             target_bal = None
-            for bal in balances:
-                if bal.currency == "USD":
-                    target_bal = bal
-                    break
-            if not target_bal:
+            if currency:
                 for bal in balances:
-                    if bal.currency == "HKD":
+                    if bal.currency.upper() == currency.upper():
                         target_bal = bal
                         break
-            if not target_bal and balances:
-                target_bal = balances[0]
+                if not target_bal:
+                    raise ValueError(f"Requested currency {currency} is not present in the Longbridge balance set.")
+            else:
+                for bal in balances:
+                    if bal.currency == "USD":
+                        target_bal = bal
+                        break
+                if not target_bal:
+                    for bal in balances:
+                        if bal.currency == "HKD":
+                            target_bal = bal
+                            break
+                if not target_bal and balances:
+                    target_bal = balances[0]
 
             if not target_bal:
                 raise ValueError("No balance information found")
@@ -146,6 +160,11 @@ class LongbridgeOpenApiAdapter(BrokerAdapter):
 
     async def list_positions(self, account_id: str) -> list[Position]:
         from longbridge.openapi import TradeContext
+        from openbroker.config import settings
+
+        if account_id != settings.longbridge_account:
+            raise ValueError(f"Account mismatch: requested account {account_id} does not match configured Longbridge account {settings.longbridge_account}")
+
         try:
             config = self._get_longbridge_config()
             ctx = TradeContext(config)
@@ -163,7 +182,7 @@ class LongbridgeOpenApiAdapter(BrokerAdapter):
 
                     quantity = Decimal(str(pos.quantity)) if pos.quantity is not None else Decimal("0")
                     cost_price = Decimal(str(pos.cost_price)) if pos.cost_price is not None else Decimal("0")
-                    market_value = quantity * cost_price
+                    market_value = None
 
                     unified_positions.append(
                         Position(
@@ -186,7 +205,7 @@ class LongbridgeOpenApiAdapter(BrokerAdapter):
         from openbroker.config import settings
 
         if account_id != settings.longbridge_account:
-            return []
+            raise ValueError(f"Account mismatch: requested account {account_id} does not match configured Longbridge account {settings.longbridge_account}")
 
         try:
             config = self._get_longbridge_config()
@@ -249,7 +268,7 @@ class LongbridgeOpenApiAdapter(BrokerAdapter):
                 symbol=draft.request.symbol,
                 order_type=order_type,
                 side=side,
-                quantity=quantity,
+                submitted_quantity=quantity,
                 time_in_force=TimeInForceType.Day,
                 submitted_price=submitted_price,
                 remark=draft.request.client_memo or "OpenBroker Trade"
