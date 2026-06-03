@@ -14,7 +14,45 @@ class RiskEngine:
         request: TradeOrderRequest,
         account_summary: AccountSummary,
     ) -> list[RiskCheckResult]:
-        return [self._check_buying_power(request, account_summary)]
+        checks = []
+        checks.append(self._check_currency(request, account_summary))
+        checks.append(self._check_quantity(request))
+        checks.append(self._check_buying_power(request, account_summary))
+        return checks
+
+    @staticmethod
+    def _check_currency(
+        request: TradeOrderRequest,
+        account_summary: AccountSummary,
+    ) -> RiskCheckResult:
+        if request.currency.upper() != account_summary.base_currency.upper():
+            return RiskCheckResult(
+                rule_id="currency_mismatch",
+                status=RiskCheckStatus.blocked,
+                reason=f"Currency mismatch: request currency {request.currency} does not match account base currency {account_summary.base_currency}.",
+                available_buying_power=account_summary.buying_power,
+                currency=account_summary.base_currency,
+            )
+        return RiskCheckResult(
+            rule_id="currency_mismatch",
+            status=RiskCheckStatus.passed,
+            reason="Order currency matches account base currency.",
+            currency=account_summary.base_currency,
+        )
+
+    @staticmethod
+    def _check_quantity(request: TradeOrderRequest) -> RiskCheckResult:
+        if request.quantity % 1 != 0:
+            return RiskCheckResult(
+                rule_id="fractional_quantity_limit",
+                status=RiskCheckStatus.blocked,
+                reason="Fractional quantities are not supported in the MVP rule set.",
+            )
+        return RiskCheckResult(
+            rule_id="fractional_quantity_limit",
+            status=RiskCheckStatus.passed,
+            reason="Quantity is integral.",
+        )
 
     @staticmethod
     def _check_buying_power(

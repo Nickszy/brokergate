@@ -174,13 +174,17 @@ class TigerOpenApiAdapter(BrokerAdapter):
         try:
             config = self._get_tiger_config()
             trade_client = TradeClient(config)
-            
-            sdk_orders = trade_client.get_orders()
+
+            # P2: Pass account parameter to filter on Tiger server side
+            sdk_orders = trade_client.get_orders(account=account_id)
             if not sdk_orders:
                 return []
-            
+
             receipts = []
             for order in sdk_orders:
+                # P2: Double-check filter locally
+                if order.account != account_id:
+                    continue
                 status = OrderStatus.submitted
                 sdk_status_name = ""
                 if order.status:
@@ -188,12 +192,12 @@ class TigerOpenApiAdapter(BrokerAdapter):
                         sdk_status_name = order.status.name.upper()
                     else:
                         sdk_status_name = str(order.status).upper()
-                
+
                 if sdk_status_name in ("REJECTED", "INACTIVE", "INVALID", "EXPIRED"):
                     status = OrderStatus.rejected
                 else:
                     status = OrderStatus.submitted
-                
+
                 receipts.append(
                     BrokerOrderReceipt(
                         broker=BrokerId.tiger,
@@ -210,14 +214,27 @@ class TigerOpenApiAdapter(BrokerAdapter):
         from tigeropen.trade.trade_client import TradeClient
         from tigeropen.common.util.contract_utils import stock_contract
         from tigeropen.common.util.order_utils import limit_order
-        
+        from openbroker.config import settings
+
+        # P0: Mode boundary protection check
+        if settings.broker_mode != "live-trade":
+            raise ValueError(f"Tiger adapter cannot submit order when broker_mode is '{settings.broker_mode}'. Must be 'live-trade'.")
+
         if draft.status != OrderStatus.confirmed:
             raise ValueError("Tiger adapter only accepts confirmed order drafts")
-            
+
         try:
             config = self._get_tiger_config()
             trade_client = TradeClient(config)
-            
+
+            # P0: Account mismatch protection check
+            if draft.request.account_id != config.account:
+                raise ValueError(f"Account mismatch: draft account {draft.request.account_id} does not match adapter account {config.account}")
+
+            # P1: Quantity integrity check
+            if draft.request.quantity % 1 != 0:
+                raise ValueError(f"Fractional quantities are not supported: {draft.request.quantity}")
+
             currency = draft.request.currency.upper()
             exchange = "SMART" if currency == "USD" else "SEHK"
             contract = stock_contract(
@@ -225,24 +242,24 @@ class TigerOpenApiAdapter(BrokerAdapter):
                 currency=currency,
                 exchange=exchange
             )
-            
+
             action = draft.request.side.upper()
             limit_price = float(draft.request.limit_price) if draft.request.limit_price is not None else None
             quantity = int(draft.request.quantity)
-            
+
             order = limit_order(
-                account=config.account,
+                account=draft.request.account_id,
                 contract=contract,
                 action=action,
                 quantity=quantity,
                 limit_price=limit_price
             )
-            
+
             trade_client.place_order(order)
-            
+
             if not order.id:
                 raise RuntimeError("Failed to place order: Tiger SDK did not return an order ID")
-                
+
             return BrokerOrderReceipt(
                 broker=BrokerId.tiger,
                 broker_order_id=str(order.id),

@@ -37,7 +37,7 @@ async def brokers() -> dict[str, list[dict[str, str]]]:
         "brokers": [
             {"id": BrokerId.tiger, "status": "paper-ready"},
             {"id": BrokerId.futu, "status": "planned"},
-            {"id": BrokerId.longbridge, "status": "planned"},
+            {"id": BrokerId.longbridge, "status": "paper-ready"},
         ]
     }
 

@@ -81,3 +81,94 @@ def test_list_positions() -> None:
     assert pos["market_value"] == "1500"
     assert pos["cost_basis"] == "140"
 
+
+def test_blocks_currency_mismatch() -> None:
+    response = client.post(
+        "/v1/orders/drafts",
+        json={
+            "broker": "tiger",
+            "account_id": "paper-account",
+            "symbol": "AAPL",
+            "side": "buy",
+            "order_type": "limit",
+            "quantity": "10",
+            "limit_price": "100",
+            "currency": "HKD",
+        },
+    )
+    assert response.status_code == 422
+    assert response.json()["detail"]["message"] == "Order blocked by risk engine"
+    checks = response.json()["detail"]["risk_checks"]
+    currency_check = next(c for c in checks if c["rule_id"] == "currency_mismatch")
+    assert currency_check["status"] == "blocked"
+
+
+def test_blocks_fractional_quantity() -> None:
+    response = client.post(
+        "/v1/orders/drafts",
+        json={
+            "broker": "tiger",
+            "account_id": "paper-account",
+            "symbol": "AAPL",
+            "side": "buy",
+            "order_type": "limit",
+            "quantity": "10.5",
+            "limit_price": "100",
+        },
+    )
+    assert response.status_code == 422
+    assert response.json()["detail"]["message"] == "Order blocked by risk engine"
+    checks = response.json()["detail"]["risk_checks"]
+    qty_check = next(c for c in checks if c["rule_id"] == "fractional_quantity_limit")
+    assert qty_check["status"] == "blocked"
+
+
+def test_longbridge_create_and_confirm_order_draft() -> None:
+    draft_response = client.post(
+        "/v1/orders/drafts",
+        json={
+            "broker": "longbridge",
+            "account_id": "paper-longbridge-account",
+            "symbol": "700.HK",
+            "side": "buy",
+            "order_type": "limit",
+            "quantity": "100",
+            "limit_price": "350",
+            "currency": "USD",
+        },
+    )
+
+    assert draft_response.status_code == 200
+    payload = draft_response.json()
+    draft_id = payload["draft"]["id"]
+
+    confirm_response = client.post(
+        f"/v1/orders/{draft_id}/confirm",
+        json={"confirmation_text": payload["required_confirmation"], "confirmed_by": "tester"},
+    )
+
+    assert confirm_response.status_code == 200
+    assert confirm_response.json()["status"] == "submitted"
+
+
+def test_longbridge_get_account_summary() -> None:
+    response = client.get("/v1/accounts/paper-longbridge-account/summary?broker=longbridge")
+    assert response.status_code == 200
+    data = response.json()
+    assert data["account_id"] == "paper-longbridge-account"
+    assert data["broker"] == "longbridge"
+    assert data["cash"] == "100000"
+    assert data["buying_power"] == "100000"
+
+
+def test_longbridge_list_positions() -> None:
+    response = client.get("/v1/accounts/paper-longbridge-account/positions?broker=longbridge")
+    assert response.status_code == 200
+    data = response.json()
+    assert len(data) == 1
+    pos = data[0]
+    assert pos["symbol"] == "700.HK"
+    assert pos["quantity"] == "100"
+    assert pos["market_value"] == "40000"
+    assert pos["cost_basis"] == "380"
+

@@ -78,6 +78,7 @@ async def test_tiger_adapter_submit_order(mock_config_cls, mock_client_cls):
     )
 
     mock_client = mock_client_cls.return_value
+    mock_config_cls.return_value.account = "U12345"
 
     def mock_place_order(order):
         order.id = 998877
@@ -86,7 +87,9 @@ async def test_tiger_adapter_submit_order(mock_config_cls, mock_client_cls):
     adapter = TigerOpenApiAdapter()
 
     with patch("tigeropen.common.util.contract_utils.stock_contract") as mock_stock_contract, \
-         patch("tigeropen.common.util.order_utils.limit_order") as mock_limit_order:
+         patch("tigeropen.common.util.order_utils.limit_order") as mock_limit_order, \
+         patch("openbroker.config.settings.broker_mode", "live-trade"), \
+         patch("openbroker.config.settings.tiger_account", "U12345"):
 
         mock_contract_obj = MagicMock()
         mock_stock_contract.return_value = mock_contract_obj
@@ -102,7 +105,7 @@ async def test_tiger_adapter_submit_order(mock_config_cls, mock_client_cls):
 
         mock_stock_contract.assert_called_once_with(symbol="AAPL", currency="USD", exchange="SMART")
         mock_limit_order.assert_called_once_with(
-            account=mock_config_cls.return_value.account,
+            account=draft.request.account_id,
             contract=mock_contract_obj,
             action="BUY",
             quantity=10,

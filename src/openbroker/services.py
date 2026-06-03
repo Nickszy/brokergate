@@ -1,6 +1,12 @@
 from fastapi import HTTPException, status
 
-from openbroker.adapters import BrokerAdapter, TigerPaperAdapter, TigerOpenApiAdapter
+from openbroker.adapters import (
+    BrokerAdapter,
+    TigerPaperAdapter,
+    TigerOpenApiAdapter,
+    LongbridgePaperAdapter,
+    LongbridgeOpenApiAdapter,
+)
 from openbroker.config import settings
 from openbroker.models import (
     AuditEvent,
@@ -122,10 +128,18 @@ class OrderWorkflow:
         return warnings
 
 
-tiger_adapter: BrokerAdapter = TigerOpenApiAdapter() if settings.tiger_enabled else TigerPaperAdapter()
+if settings.broker_mode == "paper":
+    tiger_adapter: BrokerAdapter = TigerPaperAdapter()
+    longbridge_adapter: BrokerAdapter = LongbridgePaperAdapter()
+else:
+    tiger_adapter = TigerOpenApiAdapter() if settings.tiger_enabled else TigerPaperAdapter()
+    longbridge_adapter = LongbridgeOpenApiAdapter() if settings.longbridge_enabled else LongbridgePaperAdapter()
 
 workflow = OrderWorkflow(
     store=store,
-    adapters={BrokerId.tiger: tiger_adapter},
+    adapters={
+        BrokerId.tiger: tiger_adapter,
+        BrokerId.longbridge: longbridge_adapter,
+    },
     risk_engine=risk_engine,
 )

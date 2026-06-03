@@ -18,6 +18,13 @@ class Settings(BaseSettings):
     tiger_private_key_path: str = ""
     tiger_token_path: str = ""
 
+    # Longbridge OpenAPI settings
+    longbridge_enabled: bool = False
+    longbridge_app_key: str = ""
+    longbridge_app_secret: str = ""
+    longbridge_access_token: str = ""
+    longbridge_account: str = ""
+
     model_config = SettingsConfigDict(
         env_file=".env",
         env_prefix="OPENBROKER_",
