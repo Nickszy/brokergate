@@ -155,7 +155,21 @@ async def list_orders(
 ) -> dict[str, list[BrokerOrder]]:
     adapter = workflow.get_adapter(broker)
     filters = OrderQueryFilters(symbol=symbol, status=order_status)
-    return {"orders": await adapter.list_orders(account_id, filters=filters)}
+    try:
+        orders = await adapter.list_orders(account_id, filters=filters)
+    except NotImplementedError as exc:
+        raise unsupported_error(exc) from exc
+    except Exception as exc:
+        raise HTTPException(
+            status.HTTP_502_BAD_GATEWAY,
+            detail={
+                "message": "Broker order list failed",
+                "broker": broker,
+                "account_id": account_id,
+                "error": str(exc),
+            },
+        ) from exc
+    return {"orders": orders}
 
 
 @app.post(

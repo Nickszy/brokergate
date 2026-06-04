@@ -407,3 +407,94 @@ def test_replace_order_requires_exact_confirmation(monkeypatch) -> None:
 
     assert response.status_code == 400
     assert response.json()["detail"] == "Replace confirmation text mismatch"
+
+
+def test_buy_market_replace_without_limit_price_is_blocked(monkeypatch) -> None:
+    class FakeMarketBuyReplaceAdapter:
+        async def get_order(self, account_id: str, broker_order_id: str) -> BrokerOrder:
+            return BrokerOrder(
+                broker=BrokerId.tiger,
+                account_id=account_id,
+                broker_order_id=broker_order_id,
+                symbol="AAPL",
+                side=OrderSide.buy,
+                order_type=OrderType.market,
+                quantity=Decimal("1"),
+                limit_price=None,
+                status=BrokerOrderStatus.submitted,
+                currency="USD",
+            )
+
+        async def replace_order(self, *args, **kwargs):
+            raise AssertionError("replace_order should not be called for unpriced buy replace")
+
+    monkeypatch.setitem(workflow.adapters, BrokerId.tiger, FakeMarketBuyReplaceAdapter())
+
+    response = client.post(
+        "/v1/accounts/paper-account/orders/order-1/replace?broker=tiger",
+        json={
+            "quantity": "100000",
+            "confirmation_text": "CONFIRM REPLACE 100000 AAPL",
+            "confirmed_by": "tester",
+        },
+    )
+
+    assert response.status_code == 422
+    assert response.json()["detail"] == "Limit price is required for buy order replacement"
+
+
+def test_cancel_order_checks_order_exists_before_calling_broker(monkeypatch) -> None:
+    class FakeMissingCancelAdapter:
+        async def get_order(self, account_id: str, broker_order_id: str) -> BrokerOrder:
+            raise KeyError(f"Order {broker_order_id} not found")
+
+        async def cancel_order(self, *args, **kwargs):
+            raise AssertionError("cancel_order should not be called before order existence check")
+
+    monkeypatch.setitem(workflow.adapters, BrokerId.tiger, FakeMissingCancelAdapter())
+
+    response = client.post(
+        "/v1/accounts/paper-account/orders/missing-order/cancel?broker=tiger",
+        json={"confirmed_by": "tester"},
+    )
+
+    assert response.status_code == 404
+    assert "missing-order" in response.json()["detail"]
+
+
+def test_cancel_order_rejects_terminal_status_before_calling_broker(monkeypatch) -> None:
+    class FakeFilledCancelAdapter:
+        async def get_order(self, account_id: str, broker_order_id: str) -> BrokerOrder:
+            return BrokerOrder(
+                broker=BrokerId.tiger,
+                account_id=account_id,
+                broker_order_id=broker_order_id,
+                symbol="AAPL",
+                status=BrokerOrderStatus.filled,
+            )
+
+        async def cancel_order(self, *args, **kwargs):
+            raise AssertionError("cancel_order should not be called for terminal orders")
+
+    monkeypatch.setitem(workflow.adapters, BrokerId.tiger, FakeFilledCancelAdapter())
+
+    response = client.post(
+        "/v1/accounts/paper-account/orders/order-1/cancel?broker=tiger",
+        json={"confirmed_by": "tester"},
+    )
+
+    assert response.status_code == 409
+    assert response.json()["detail"] == "Order status is not cancellable"
+
+
+def test_list_orders_broker_failure_returns_502(monkeypatch) -> None:
+    class FakeOrderQueryFailureAdapter:
+        async def list_orders(self, account_id: str, filters=None) -> list[BrokerOrder]:
+            raise RuntimeError("broker timeout")
+
+    monkeypatch.setitem(workflow.adapters, BrokerId.tiger, FakeOrderQueryFailureAdapter())
+
+    response = client.get("/v1/accounts/paper-account/orders?broker=tiger")
+
+    assert response.status_code == 502
+    assert response.json()["detail"]["message"] == "Broker order list failed"

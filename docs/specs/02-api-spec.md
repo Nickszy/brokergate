@@ -112,11 +112,11 @@
 
 `POST /v1/accounts/{account_id}/orders/{broker_order_id}/replace?broker=tiger`
 
-改单。请求必须带 `confirmation_text` 和 `confirmed_by`。买入订单改数量或价格时会重新执行购买力风控。
+改单。请求必须带 `confirmation_text` 和 `confirmed_by`。买入订单改单必须有 `limit_price` 或原订单限价，否则返回 `422`，避免无法估值的买单绕过购买力风控。买入订单改数量或价格时会重新执行购买力风控。
 
 `POST /v1/accounts/{account_id}/orders/{broker_order_id}/cancel?broker=tiger`
 
-撤单。成功或提交后写入审计事件。
+撤单。服务端会先查询券商订单，只有 `submitted` 和 `partially_filled` 状态会继续调用券商撤单；订单不存在返回 `404`，终态订单返回 `409`。成功或提交后写入审计事件。
 
 `GET /v1/accounts/{account_id}/orders/{broker_order_id}/fees?broker=tiger`
 

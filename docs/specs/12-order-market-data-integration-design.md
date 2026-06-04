@@ -42,8 +42,8 @@ BrokerGate 当前已经完成最小交易闭环：账户快照、购买力风控
 
 1. 只读能力可以直接调用券商适配器，但必须返回统一模型。
 2. 会改变账户状态的能力必须写审计事件。
-3. 改单如果增加买入金额或改变标的、方向、数量、价格，必须重新走统一风控。
-4. 撤单是交易变更能力，必须有审计和幂等处理。
+3. 改单如果增加买入金额或改变标的、方向、数量、价格，必须重新走统一风控；买入改单没有可估值限价时必须拒绝。
+4. 撤单是交易变更能力，必须先查询券商订单，确认订单存在且处于可撤状态后再写审计和调用券商。
 5. 订单状态以券商为准，BrokerGate 本地状态只做缓存和审计，不伪造成交状态。
 6. 行情能力先做快照查询，不做订阅推送。
 7. 实时报价、快照和股票基础信息是只读市场数据，可以通过 `broker=auto` 或 `fallback=true` 走多券商 fallback；响应必须标注真实数据来源。
@@ -269,6 +269,7 @@ class InstrumentProfile(BaseModel):
 - 改单必须写 `order.replace_requested` 和 `order.replace_submitted` 审计事件。
 - 改单前查询原订单。
 - 如果买入订单的数量或价格增加，必须用新数量和新价格重新执行购买力风控。
+- 如果买入改单没有 `limit_price`，且原订单也没有限价，返回 `422`，不能提交到券商。
 - 确认文本必须由服务端生成并完全匹配。实现时可以先提供 `POST /v1/orders/{broker_order_id}/replace/preview` 生成确认文本，再提交改单。
 
 ### 撤单
@@ -286,8 +287,11 @@ class InstrumentProfile(BaseModel):
 
 行为：
 
-- 撤单必须幂等。如果订单已经取消或已终态，返回当前订单状态，不重复调用券商撤单。
-- 写 `order.cancel_requested` 和 `order.cancel_submitted` 审计事件。
+- 撤单前必须先查询券商订单。
+- 如果订单不存在，返回 `404`，不调用券商撤单。
+- 如果订单已经取消、成交、拒绝、过期或其他终态，返回 `409`，不调用券商撤单。
+- 只有 `submitted` 和 `partially_filled` 状态会继续调用券商撤单。
+- 通过前置校验后，写 `order.cancel_requested` 和 `order.cancel_submitted` 审计事件。
 
 ### 订单费用
 
@@ -441,6 +445,8 @@ class BrokerAdapter:
 | 券商连接失败 | `502` | `broker.call_failed` |
 | 订单不存在 | `404` | 不写审计 |
 | 改单风控不通过 | `422` | `risk.order_replace_blocked` |
+| 买入改单缺少可估值限价 | `422` | 不写券商提交审计 |
+| 撤单订单不可撤 | `409` | 不调用券商撤单 |
 | 改单提交成功 | `200` | `order.replace_submitted` |
 | 撤单提交成功 | `200` | `order.cancel_submitted` |
 | 状态同步成功 | `200` | `order.status_synced` |

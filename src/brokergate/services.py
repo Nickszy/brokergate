@@ -15,6 +15,7 @@ from brokergate.models import (
     BrokerId,
     BrokerOrder,
     BrokerOrderReceipt,
+    BrokerOrderStatus,
     CancelOrderRequest,
     ConfirmOrderRequest,
     InstrumentProfile,
@@ -171,12 +172,27 @@ class OrderWorkflow:
 
     async def preview_order(self, request: TradeOrderRequest) -> OrderPreview:
         adapter = self.get_adapter(request.broker)
-        account_summary = await adapter.get_account_summary(request.account_id, currency=request.currency)
+        try:
+            account_summary = await adapter.get_account_summary(request.account_id, currency=request.currency)
+        except Exception as exc:
+            raise self._broker_bad_gateway(
+                message="Broker account snapshot failed",
+                broker=request.broker,
+                account_id=request.account_id,
+                error=exc,
+            ) from exc
         risk_checks = self.risk_engine.evaluate_order(request, account_summary)
         try:
             return await adapter.preview_order(request, account_summary)
         except NotImplementedError:
             return self._local_order_preview(request, account_summary.buying_power, risk_checks)
+        except Exception as exc:
+            raise self._broker_bad_gateway(
+                message="Broker order preview failed",
+                broker=request.broker,
+                account_id=request.account_id,
+                error=exc,
+            ) from exc
 
     async def get_max_tradable_quantity(
         self,
@@ -187,7 +203,15 @@ class OrderWorkflow:
             return await adapter.get_max_tradable_quantity(request)
         except NotImplementedError:
             if request.side == "sell":
-                positions = await adapter.list_positions(request.account_id)
+                try:
+                    positions = await adapter.list_positions(request.account_id)
+                except Exception as exc:
+                    raise self._broker_bad_gateway(
+                        message="Broker position list failed",
+                        broker=request.broker,
+                        account_id=request.account_id,
+                        error=exc,
+                    ) from exc
                 held_quantity = Decimal("0")
                 for position in positions:
                     if position.symbol.upper() == request.symbol.upper():
@@ -203,8 +227,23 @@ class OrderWorkflow:
                     max_quantity=held_quantity,
                     raw={"source": "local_position_estimate"},
                 )
-            account_summary = await adapter.get_account_summary(request.account_id, currency=request.currency)
+            try:
+                account_summary = await adapter.get_account_summary(request.account_id, currency=request.currency)
+            except Exception as exc:
+                raise self._broker_bad_gateway(
+                    message="Broker account snapshot failed",
+                    broker=request.broker,
+                    account_id=request.account_id,
+                    error=exc,
+                ) from exc
             return self._local_max_tradable_quantity(request, account_summary.buying_power)
+        except Exception as exc:
+            raise self._broker_bad_gateway(
+                message="Broker max tradable quantity failed",
+                broker=request.broker,
+                account_id=request.account_id,
+                error=exc,
+            ) from exc
 
     async def sync_order_status(
         self,
@@ -218,6 +257,13 @@ class OrderWorkflow:
             order = await adapter.get_order(account_id, broker_order_id)
         except KeyError as exc:
             raise HTTPException(status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
+        except Exception as exc:
+            raise self._broker_bad_gateway(
+                message="Broker order status sync failed",
+                broker=broker,
+                account_id=account_id,
+                error=exc,
+            ) from exc
         self.store.append_audit(
             AuditEvent(
                 actor=actor,
@@ -240,6 +286,13 @@ class OrderWorkflow:
             existing_order = await adapter.get_order(account_id, broker_order_id)
         except KeyError as exc:
             raise HTTPException(status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
+        except Exception as exc:
+            raise self._broker_bad_gateway(
+                message="Broker order lookup failed",
+                broker=broker,
+                account_id=account_id,
+                error=exc,
+            ) from exc
 
         new_quantity = request.quantity or existing_order.quantity
         new_price = request.limit_price or existing_order.limit_price
@@ -250,7 +303,12 @@ class OrderWorkflow:
         )
         if request.confirmation_text != expected_confirmation:
             raise HTTPException(status.HTTP_400_BAD_REQUEST, detail="Replace confirmation text mismatch")
-        if existing_order.side == "buy" and new_price is not None:
+        if existing_order.side == "buy":
+            if new_price is None:
+                raise HTTPException(
+                    status.HTTP_422_UNPROCESSABLE_ENTITY,
+                    detail="Limit price is required for buy order replacement",
+                )
             risk_request = TradeOrderRequest(
                 broker=broker,
                 account_id=account_id,
@@ -261,7 +319,15 @@ class OrderWorkflow:
                 limit_price=new_price,
                 currency=existing_order.currency,
             )
-            account_summary = await adapter.get_account_summary(account_id, currency=existing_order.currency)
+            try:
+                account_summary = await adapter.get_account_summary(account_id, currency=existing_order.currency)
+            except Exception as exc:
+                raise self._broker_bad_gateway(
+                    message="Broker account snapshot failed",
+                    broker=broker,
+                    account_id=account_id,
+                    error=exc,
+                ) from exc
             risk_checks = self.risk_engine.evaluate_order(risk_request, account_summary)
             blocked_checks = [check for check in risk_checks if check.status == RiskCheckStatus.blocked]
             if blocked_checks:
@@ -293,6 +359,21 @@ class OrderWorkflow:
             order = await adapter.replace_order(account_id, broker_order_id, request)
         except NotImplementedError as exc:
             raise HTTPException(status.HTTP_501_NOT_IMPLEMENTED, detail=str(exc)) from exc
+        except Exception as exc:
+            self.store.append_audit(
+                AuditEvent(
+                    actor=request.confirmed_by,
+                    action="order.replace_failed",
+                    subject=f"{broker}:{account_id}:{broker_order_id}",
+                    details={"error": str(exc)},
+                )
+            )
+            raise self._broker_bad_gateway(
+                message="Broker order replace failed",
+                broker=broker,
+                account_id=account_id,
+                error=exc,
+            ) from exc
         self.store.append_audit(
             AuditEvent(
                 actor=request.confirmed_by,
@@ -311,6 +392,23 @@ class OrderWorkflow:
         request: CancelOrderRequest,
     ) -> BrokerOrder:
         adapter = self.get_adapter(broker)
+        try:
+            existing_order = await adapter.get_order(account_id, broker_order_id)
+        except KeyError as exc:
+            raise HTTPException(status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
+        except Exception as exc:
+            raise self._broker_bad_gateway(
+                message="Broker order lookup failed",
+                broker=broker,
+                account_id=account_id,
+                error=exc,
+            ) from exc
+        if existing_order.status not in {
+            BrokerOrderStatus.submitted,
+            BrokerOrderStatus.partially_filled,
+        }:
+            raise HTTPException(status.HTTP_409_CONFLICT, detail="Order status is not cancellable")
+
         self.store.append_audit(
             AuditEvent(
                 actor=request.confirmed_by,
@@ -323,6 +421,21 @@ class OrderWorkflow:
             order = await adapter.cancel_order(account_id, broker_order_id, request)
         except NotImplementedError as exc:
             raise HTTPException(status.HTTP_501_NOT_IMPLEMENTED, detail=str(exc)) from exc
+        except Exception as exc:
+            self.store.append_audit(
+                AuditEvent(
+                    actor=request.confirmed_by,
+                    action="order.cancel_failed",
+                    subject=f"{broker}:{account_id}:{broker_order_id}",
+                    details={"error": str(exc)},
+                )
+            )
+            raise self._broker_bad_gateway(
+                message="Broker order cancel failed",
+                broker=broker,
+                account_id=account_id,
+                error=exc,
+            ) from exc
         self.store.append_audit(
             AuditEvent(
                 actor=request.confirmed_by,
@@ -351,6 +464,23 @@ class OrderWorkflow:
         if limit_price is None:
             return f"CONFIRM REPLACE {quantity} {symbol}"
         return f"CONFIRM REPLACE {quantity} {symbol} {limit_price}"
+
+    @staticmethod
+    def _broker_bad_gateway(
+        message: str,
+        broker: BrokerId,
+        account_id: str,
+        error: Exception,
+    ) -> HTTPException:
+        return HTTPException(
+            status.HTTP_502_BAD_GATEWAY,
+            detail={
+                "message": message,
+                "broker": broker,
+                "account_id": account_id,
+                "error": str(error),
+            },
+        )
 
     @staticmethod
     def _risk_warnings(request: TradeOrderRequest) -> list[str]:
