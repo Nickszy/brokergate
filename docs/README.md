@@ -14,3 +14,5 @@
 - `docs/specs/10-multi-broker-target-architecture.md`：多券商目标架构。
 - `docs/specs/11-broker-openapi-coverage.md`：各券商开放接口能力和当前项目覆盖范围。
 - `docs/specs/12-order-market-data-integration-design.md`：订单查询、改单撤单、成交、行情快照和股票基础信息的接入设计。
+- `web/README.md`：Next.js 聚合资产交易台、本地运行方式和 Vercel 部署说明。
+- `docs/designs/brokergate-asset-dashboard.html`：资产交易台设计稿。

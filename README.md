@@ -16,6 +16,7 @@ BrokerGate is not an auto-trading bot and does not provide investment advice.
 - Account summary, positions, order drafts, confirmation, order management, executions, and audit events
 - First risk rule: buy orders cannot exceed account buying power
 - Read-only quote and instrument profile fallback across configured market data adapters
+- Next.js web dashboard for aggregated assets, positions, broker connection state, and human-confirmed order drafts
 - Broker SDK paper-account path when credentials are configured
 - Local paper fallback when no broker credentials are configured
 - Docker Compose deployment for local and VPS installs
@@ -48,6 +49,18 @@ Never commit `.env`.
 uv sync --dev
 uv run uvicorn brokergate.main:app --reload
 ```
+
+Run the web dashboard in a second terminal:
+
+```powershell
+cd web
+npm install
+npm run dev
+```
+
+The browser UI uses server-side Next.js routes to call BrokerGate. Configure
+`web/.env.local` with `BROKERGATE_API_BASE_URL`, `BROKERGATE_API_KEY`, and
+`BROKERGATE_WEB_ACCOUNTS`; see [BrokerGate Web](web/README.md).
 
 ## Broker Status
 
@@ -88,6 +101,7 @@ The default `BROKERGATE_BROKER_MODE=paper` is intended for broker paper/simulate
 - [Multi-Broker Target Architecture](docs/specs/10-multi-broker-target-architecture.md)
 - [Broker OpenAPI Coverage Matrix](docs/specs/11-broker-openapi-coverage.md)
 - [Order and Market Data Integration Design](docs/specs/12-order-market-data-integration-design.md)
+- [BrokerGate Web Dashboard](web/README.md)
 - [Tiger OpenAPI Integration Guide](docs/guides/tiger-openapi-integration.md)
 - [Longbridge OpenAPI Integration Guide](docs/guides/longbridge-openapi-integration.md)
 
@@ -109,6 +123,7 @@ BrokerGate 不是自动炒股机器人，也不提供投资建议。
 - 账户摘要、持仓、订单草稿、确认执行、订单管理、成交查询、审计日志
 - 首条风控规则：买入金额不能超过账户购买力
 - 行情和股票基础信息支持只读 fallback，可在一个券商失败时切到其他已配置行情源
+- Next.js 网页交易台，用于聚合资产、持仓、券商连接状态和人工确认订单草稿
 - 配置券商凭证后，可走券商 SDK 的模拟账户路径
 - 未配置券商凭证时，提供本地 paper fallback，方便快速体验
 - 支持 Docker Compose 本地/VPS 部署
@@ -141,6 +156,18 @@ docker compose up --build
 uv sync --dev
 uv run uvicorn brokergate.main:app --reload
 ```
+
+另开一个终端启动网页交易台：
+
+```powershell
+cd web
+npm install
+npm run dev
+```
+
+浏览器 UI 通过 Next.js 服务端路由调用 BrokerGate，不会在浏览器暴露券商密钥。
+在 `web/.env.local` 里配置 `BROKERGATE_API_BASE_URL`、`BROKERGATE_API_KEY`
+和 `BROKERGATE_WEB_ACCOUNTS`，详见 [BrokerGate Web](web/README.md)。
 
 ## 券商状态
 
