@@ -13,8 +13,9 @@ BrokerGate is not an auto-trading bot and does not provide investment advice.
 ## Features
 
 - Unified REST API for Tiger and Longbridge adapters
-- Account summary, positions, order drafts, confirmation, and audit events
+- Account summary, positions, order drafts, confirmation, order management, executions, and audit events
 - First risk rule: buy orders cannot exceed account buying power
+- Read-only quote and instrument profile fallback across configured market data adapters
 - Broker SDK paper-account path when credentials are configured
 - Local paper fallback when no broker credentials are configured
 - Docker Compose deployment for local and VPS installs
@@ -85,6 +86,8 @@ The default `BROKERGATE_BROKER_MODE=paper` is intended for broker paper/simulate
 - [Roadmap and Validation Spec](docs/specs/08-roadmap-validation-spec.md)
 - [Unified Risk Engine Spec](docs/specs/09-unified-risk-engine-spec.md)
 - [Multi-Broker Target Architecture](docs/specs/10-multi-broker-target-architecture.md)
+- [Broker OpenAPI Coverage Matrix](docs/specs/11-broker-openapi-coverage.md)
+- [Order and Market Data Integration Design](docs/specs/12-order-market-data-integration-design.md)
 - [Tiger OpenAPI Integration Guide](docs/guides/tiger-openapi-integration.md)
 - [Longbridge OpenAPI Integration Guide](docs/guides/longbridge-openapi-integration.md)
 
@@ -103,8 +106,9 @@ BrokerGate 不是自动炒股机器人，也不提供投资建议。
 ## 功能
 
 - 老虎、长桥适配器的统一 REST API
-- 账户摘要、持仓、订单草稿、确认执行、审计日志
+- 账户摘要、持仓、订单草稿、确认执行、订单管理、成交查询、审计日志
 - 首条风控规则：买入金额不能超过账户购买力
+- 行情和股票基础信息支持只读 fallback，可在一个券商失败时切到其他已配置行情源
 - 配置券商凭证后，可走券商 SDK 的模拟账户路径
 - 未配置券商凭证时，提供本地 paper fallback，方便快速体验
 - 支持 Docker Compose 本地/VPS 部署
@@ -175,5 +179,7 @@ curl http://127.0.0.1:8000/v1/brokers
 - [路线与验证规格](docs/specs/08-roadmap-validation-spec.md)
 - [统一风控规格](docs/specs/09-unified-risk-engine-spec.md)
 - [多券商目标架构](docs/specs/10-multi-broker-target-architecture.md)
+- [券商开放接口覆盖矩阵](docs/specs/11-broker-openapi-coverage.md)
+- [订单和行情扩展接入设计](docs/specs/12-order-market-data-integration-design.md)
 - [老虎 OpenAPI 接入指南](docs/guides/tiger-openapi-integration.md)
 - [长桥 OpenAPI 接入指南](docs/guides/longbridge-openapi-integration.md)
