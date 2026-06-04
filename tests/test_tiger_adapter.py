@@ -2,7 +2,17 @@
 import pytest
 from decimal import Decimal
 from brokergate.adapters.tiger import TigerOpenApiAdapter
-from brokergate.models import OrderDraft, TradeOrderRequest, OrderSide, OrderType, OrderStatus
+from brokergate.models import (
+    AccountSummary,
+    CancelOrderRequest,
+    MaxTradableQuantityRequest,
+    OrderDraft,
+    OrderSide,
+    OrderStatus,
+    OrderType,
+    ReplaceOrderRequest,
+    TradeOrderRequest,
+)
 
 
 @patch("tigeropen.trade.trade_client.TradeClient")
@@ -111,3 +121,114 @@ async def test_tiger_adapter_submit_order(mock_config_cls, mock_client_cls):
             quantity=10,
             limit_price=150.0
         )
+
+
+@patch("tigeropen.trade.trade_client.TradeClient")
+@patch("tigeropen.tiger_open_config.TigerOpenClientConfig")
+@pytest.mark.anyio
+async def test_tiger_adapter_preview_and_max_quantity_use_sdk(mock_config_cls, mock_client_cls):
+    mock_client = mock_client_cls.return_value
+    mock_preview = MagicMock()
+    mock_preview.commission = 1.23
+    mock_client.preview_order.return_value = mock_preview
+    mock_client.get_estimate_tradable_quantity.return_value = 99
+
+    req = TradeOrderRequest(
+        broker="tiger",
+        account_id="U12345",
+        symbol="AAPL",
+        side=OrderSide.buy,
+        order_type=OrderType.limit,
+        quantity=Decimal("2"),
+        limit_price=Decimal("150"),
+    )
+
+    adapter = TigerOpenApiAdapter()
+    with patch("tigeropen.common.util.contract_utils.stock_contract"), \
+         patch("tigeropen.common.util.order_utils.limit_order") as mock_limit_order:
+        mock_limit_order.return_value = MagicMock()
+        preview = await adapter.preview_order(
+            req,
+            AccountSummary(
+                broker="tiger",
+                account_id="U12345",
+                cash=Decimal("100000"),
+                buying_power=Decimal("100000"),
+            ),
+        )
+        max_qty = await adapter.get_max_tradable_quantity(
+            MaxTradableQuantityRequest(
+                broker="tiger",
+                account_id="U12345",
+                symbol="AAPL",
+                side=OrderSide.buy,
+                price=Decimal("150"),
+            )
+        )
+
+    assert preview.broker_preview["source"] == "tiger_openapi"
+    assert preview.estimated_fees == Decimal("1.23")
+    assert max_qty.max_quantity == Decimal("99")
+    assert max_qty.raw["source"] == "tiger_openapi"
+
+
+@patch("tigeropen.trade.trade_client.TradeClient")
+@patch("tigeropen.tiger_open_config.TigerOpenClientConfig")
+@pytest.mark.anyio
+async def test_tiger_adapter_replace_and_cancel_use_sdk(mock_config_cls, mock_client_cls):
+    mock_order = MagicMock()
+    mock_order.id = 123
+    mock_order.order_id = 123
+    mock_order.account = "U12345"
+    mock_order.quantity = 1
+    mock_order.filled = 0
+    mock_order.limit_price = 100
+    mock_order.status.name = "NEW"
+    mock_order.contract.symbol = "AAPL"
+    mock_order.contract.currency = "USD"
+
+    mock_client = mock_client_cls.return_value
+    mock_client.get_order.return_value = mock_order
+
+    adapter = TigerOpenApiAdapter()
+    replaced = await adapter.replace_order(
+        "U12345",
+        "123",
+        ReplaceOrderRequest(
+            quantity=Decimal("2"),
+            limit_price=Decimal("101"),
+            confirmation_text="CONFIRM REPLACE 2 AAPL 101",
+            confirmed_by="tester",
+        ),
+    )
+    cancelled = await adapter.cancel_order(
+        "U12345",
+        "123",
+        CancelOrderRequest(confirmed_by="tester"),
+    )
+
+    assert replaced.broker_order_id == "123"
+    assert cancelled.broker_order_id == "123"
+    mock_client.modify_order.assert_called_once()
+    mock_client.cancel_order.assert_called_once_with(account="U12345", id=123)
+
+
+@patch("tigeropen.quote.quote_client.QuoteClient")
+@patch("tigeropen.tiger_open_config.TigerOpenClientConfig")
+@pytest.mark.anyio
+async def test_tiger_adapter_quote_snapshots_use_sdk(mock_config_cls, mock_quote_cls):
+    quote = MagicMock()
+    quote.symbol = "AAPL"
+    quote.currency = "USD"
+    quote.latest_price = 190.5
+    quote.bid_price = 190.4
+    quote.ask_price = 190.6
+
+    mock_quote_cls.return_value.get_briefs.return_value = [quote]
+
+    adapter = TigerOpenApiAdapter()
+    snapshots = await adapter.get_quote_snapshots(["AAPL"])
+
+    assert snapshots[0].symbol == "AAPL"
+    assert snapshots[0].last_price == Decimal("190.5")
+    mock_quote_cls.return_value.get_briefs.assert_called_once_with(["AAPL"], include_ask_bid=True)

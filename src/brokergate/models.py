@@ -30,6 +30,16 @@ class OrderStatus(StrEnum):
     rejected = "rejected"
 
 
+class BrokerOrderStatus(StrEnum):
+    unknown = "unknown"
+    submitted = "submitted"
+    partially_filled = "partially_filled"
+    filled = "filled"
+    cancelled = "cancelled"
+    rejected = "rejected"
+    expired = "expired"
+
+
 class RiskCheckStatus(StrEnum):
     passed = "passed"
     blocked = "blocked"
@@ -66,6 +76,40 @@ class TradeOrderRequest(BaseModel):
     client_memo: str | None = Field(default=None, max_length=500)
 
 
+class OrderQueryFilters(BaseModel):
+    symbol: str | None = None
+    status: BrokerOrderStatus | None = None
+    date_from: datetime | None = None
+    date_to: datetime | None = None
+
+
+class ExecutionQueryFilters(BaseModel):
+    symbol: str | None = None
+    date_from: datetime | None = None
+    date_to: datetime | None = None
+
+
+class MaxTradableQuantityRequest(BaseModel):
+    broker: BrokerId
+    account_id: str = Field(min_length=1)
+    symbol: str = Field(min_length=1)
+    side: OrderSide
+    price: Decimal | None = Field(default=None, gt=0)
+    currency: str = Field(default="USD", min_length=3, max_length=3)
+
+
+class ReplaceOrderRequest(BaseModel):
+    quantity: Decimal | None = Field(default=None, gt=0)
+    limit_price: Decimal | None = Field(default=None, gt=0)
+    confirmation_text: str = Field(min_length=1)
+    confirmed_by: str = Field(min_length=1)
+
+
+class CancelOrderRequest(BaseModel):
+    confirmed_by: str = Field(min_length=1)
+    reason: str | None = Field(default=None, max_length=500)
+
+
 class OrderDraft(BaseModel):
     id: str = Field(default_factory=lambda: f"draft_{uuid4().hex}")
     request: TradeOrderRequest
@@ -87,6 +131,109 @@ class BrokerOrderReceipt(BaseModel):
     submitted_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
     raw: dict[str, Any] = Field(default_factory=dict)
 
+
+class BrokerOrder(BaseModel):
+    broker: BrokerId
+    account_id: str
+    broker_order_id: str
+    symbol: str = ""
+    side: OrderSide = OrderSide.buy
+    order_type: OrderType = OrderType.limit
+    quantity: Decimal = Decimal("0")
+    filled_quantity: Decimal = Decimal("0")
+    limit_price: Decimal | None = None
+    average_fill_price: Decimal | None = None
+    status: BrokerOrderStatus = BrokerOrderStatus.unknown
+    currency: str = "USD"
+    submitted_at: datetime | None = None
+    updated_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
+    raw: dict[str, Any] = Field(default_factory=dict)
+
+
+class OrderPreview(BaseModel):
+    broker: BrokerId
+    account_id: str
+    symbol: str
+    side: OrderSide
+    quantity: Decimal
+    limit_price: Decimal | None = None
+    estimated_amount: Decimal | None = None
+    estimated_fees: Decimal | None = None
+    max_tradable_quantity: Decimal | None = None
+    risk_checks: list[RiskCheckResult] = Field(default_factory=list)
+    broker_preview: dict[str, Any] = Field(default_factory=dict)
+
+
+class TradableQuantity(BaseModel):
+    broker: BrokerId
+    account_id: str
+    symbol: str
+    side: OrderSide
+    price: Decimal | None = None
+    currency: str
+    max_quantity: Decimal
+    raw: dict[str, Any] = Field(default_factory=dict)
+
+
+class OrderFee(BaseModel):
+    broker: BrokerId
+    account_id: str
+    broker_order_id: str | None = None
+    symbol: str | None = None
+    currency: str = "USD"
+    total_fee: Decimal | None = None
+    items: list[dict[str, Any]] = Field(default_factory=list)
+    raw: dict[str, Any] = Field(default_factory=dict)
+
+
+class OrderExecution(BaseModel):
+    broker: BrokerId
+    account_id: str
+    execution_id: str
+    symbol: str
+    side: OrderSide
+    quantity: Decimal
+    price: Decimal
+    currency: str
+    executed_at: datetime
+    broker_order_id: str | None = None
+    raw: dict[str, Any] = Field(default_factory=dict)
+
+
+class QuoteSnapshot(BaseModel):
+    broker: BrokerId
+    source_broker: BrokerId | None = None
+    fallback_from: BrokerId | None = None
+    fallback_reason: str | None = None
+    symbol: str
+    name: str | None = None
+    currency: str = "USD"
+    last_price: Decimal | None = None
+    bid_price: Decimal | None = None
+    ask_price: Decimal | None = None
+    open_price: Decimal | None = None
+    high_price: Decimal | None = None
+    low_price: Decimal | None = None
+    previous_close: Decimal | None = None
+    timestamp: datetime | None = None
+    raw: dict[str, Any] = Field(default_factory=dict)
+
+
+class InstrumentProfile(BaseModel):
+    broker: BrokerId
+    source_broker: BrokerId | None = None
+    fallback_from: BrokerId | None = None
+    fallback_reason: str | None = None
+    symbol: str
+    name: str | None = None
+    market: str | None = None
+    currency: str | None = None
+    instrument_type: str | None = None
+    lot_size: Decimal | None = None
+    tradable: bool | None = None
+    raw: dict[str, Any] = Field(default_factory=dict)
+
+
 class AuditEvent(BaseModel):
     id: str = Field(default_factory=lambda: f"audit_{uuid4().hex}")
     actor: str
@@ -105,4 +252,3 @@ class Position(BaseModel):
     currency: str = "USD"
     cost_basis: Decimal
     updated_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
-
