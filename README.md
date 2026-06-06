@@ -1,19 +1,19 @@
-# BrokerGate
+# OneBroker
 
 ## 面向中文用户的自部署多券商账户与交易网关
 
-BrokerGate 想解决一个很具体的问题：
+OneBroker 想解决一个很具体的问题：
 
-> 有些用户同时使用老虎、长桥、富途、IBKR 等海外券商，但账户、持仓、订单和交易入口分散在不同 App 里。BrokerGate 希望通过券商官方 OpenAPI，把这些能力接回用户自己的控制台。
+> 有些用户同时使用老虎、长桥、富途、IBKR 等海外券商，但账户、持仓、订单和交易入口分散在不同 App 里。OneBroker 希望通过券商官方 OpenAPI，把这些能力接回用户自己的控制台。
 
-BrokerGate 同时重视两件事：
+OneBroker 同时重视两件事：
 
 - **看账户**：统一查看资产、现金、持仓、订单、成交和券商连接状态。
 - **做交易**：通过订单草稿、风控检查和人工确认，把交易指令提交给用户本人已授权的券商账户。
 
 默认策略是：**模拟账户优先，交易默认关闭，真实交易必须显式开启，并且需要人工确认。**
 
-BrokerGate 不是券商，不托管用户资金，不提供投资建议，也不是自动炒股机器人。
+OneBroker 不是券商，不托管用户资金，不提供投资建议，也不是自动炒股机器人。
 
 ---
 
@@ -26,7 +26,7 @@ BrokerGate 不是券商，不托管用户资金，不提供投资建议，也不
 - 想把账户数据接入自己的投资看板、脚本或 AI Agent，但每家券商 API 都不一样；
 - 需要一个能先跑模拟账户、再谨慎接真实账户的统一中台。
 
-BrokerGate 的目标不是绕过券商，而是使用**券商官方 OpenAPI**，让用户把本人合法持有的券商账户接回自己的自部署环境。
+OneBroker 的目标不是绕过券商，而是使用**券商官方 OpenAPI**，让用户把本人合法持有的券商账户接回自己的自部署环境。
 
 ---
 
@@ -51,7 +51,7 @@ BrokerGate 的目标不是绕过券商，而是使用**券商官方 OpenAPI**，
 3. **交易默认关闭**：真实交易必须显式设置 `BROKERGATE_BROKER_MODE=live-trade`。
 4. **人工确认执行**：AI 工具或外部客户端可以生成订单草稿，但不能绕过确认直接提交。
 5. **用户自主管理密钥**：优先部署在用户本地、NAS、VPS 或用户自己的云账号中。
-6. **不提供投资建议**：BrokerGate 只做账户、持仓、订单和交易能力的统一接入。
+6. **不提供投资建议**：OneBroker 只做账户、持仓、订单和交易能力的统一接入。
 
 ---
 
@@ -91,7 +91,7 @@ docker compose up --build
 
 后续可通过 Render Blueprint 部署到用户自己的 Render 账号。部署后，用户在 Render 后台填写自己的环境变量和券商模拟账户凭证。
 
-> 原则：BrokerGate 官方不需要接触用户的券商密钥。
+> 原则：OneBroker 官方不需要接触用户的券商密钥。
 
 ---
 
@@ -110,14 +110,14 @@ npm install
 npm run dev
 ```
 
-浏览器 UI 通过 Next.js 服务端路由调用 BrokerGate，不会在浏览器暴露券商密钥。
-在 `web/.env.local` 里配置 `BROKERGATE_API_BASE_URL`、`BROKERGATE_API_KEY` 和 `BROKERGATE_WEB_ACCOUNTS`，详见 [BrokerGate Web](web/README.md)。
+浏览器 UI 通过 Next.js 服务端路由调用 OneBroker，不会在浏览器暴露券商密钥。
+在 `web/.env.local` 里配置 `BROKERGATE_API_BASE_URL`、`BROKERGATE_API_KEY` 和 `BROKERGATE_WEB_ACCOUNTS`，详见 [OneBroker Web 控制台](web/README.md)。
 
 ---
 
 ## 券商状态
 
-BrokerGate 会动态返回券商注册和连接状态：
+OneBroker 会动态返回券商注册和连接状态：
 
 ```bash
 curl http://127.0.0.1:8000/v1/brokers
@@ -154,7 +154,7 @@ BROKERGATE_CONFIRMATION_REQUIRED=true
 
 ## 适合谁
 
-BrokerGate 第一阶段更适合：
+OneBroker 第一阶段更适合：
 
 - 已经有海外券商账户的中文用户；
 - 希望统一查看多券商资产、持仓和交易记录的人；
@@ -192,13 +192,13 @@ BrokerGate 第一阶段更适合：
 - [订单和行情扩展接入设计](docs/specs/12-order-market-data-integration-design.md)
 - [老虎 OpenAPI 接入指南](docs/guides/tiger-openapi-integration.md)
 - [长桥 OpenAPI 接入指南](docs/guides/longbridge-openapi-integration.md)
-- [BrokerGate Web 控制台](web/README.md)
+- [OneBroker Web 控制台](web/README.md)
 
 ---
 
 ## 免责声明
 
-BrokerGate 是开源软件工具，不是证券经纪商、投资顾问或资产管理服务。用户需要自行确认其券商账户、API 使用方式和交易行为符合所在地法律法规及券商协议。所有交易行为均由用户本人确认并通过其本人券商账户执行。
+OneBroker 是开源软件工具，不是证券经纪商、投资顾问或资产管理服务。用户需要自行确认其券商账户、API 使用方式和交易行为符合所在地法律法规及券商协议。所有交易行为均由用户本人确认并通过其本人券商账户执行。
 
 ---
 
