@@ -1,0 +1,1439 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>BrokerGate Asset Dashboard Prototype</title>
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='10' fill='%2320242a'/%3E%3Ctext x='32' y='39' text-anchor='middle' font-family='Arial' font-size='22' font-weight='700' fill='%239af0cc'%3EBG%3C/text%3E%3C/svg%3E" />
+  <style>
+    :root {
+      --ink: #121417;
+      --muted: #65707d;
+      --faint: #aab2bd;
+      --line: #dbe1e8;
+      --panel: #ffffff;
+      --paper: #f4f6f0;
+      --paper-2: #e9eee6;
+      --green: #167a59;
+      --green-soft: #dceee7;
+      --red: #b54545;
+      --red-soft: #f4dddd;
+      --blue: #265dff;
+      --blue-soft: #e3e9ff;
+      --amber: #a96d00;
+      --amber-soft: #f6ead2;
+      --charcoal: #20242a;
+      --shadow: 0 18px 48px rgba(26, 32, 44, 0.12);
+      --radius: 8px;
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      margin: 0;
+      min-height: 100vh;
+      color: var(--ink);
+      background:
+        linear-gradient(90deg, rgba(18, 20, 23, 0.04) 1px, transparent 1px),
+        linear-gradient(0deg, rgba(18, 20, 23, 0.035) 1px, transparent 1px),
+        var(--paper);
+      background-size: 28px 28px;
+      font-family: "Bahnschrift", "Aptos", "Segoe UI", sans-serif;
+      letter-spacing: 0;
+    }
+
+    button,
+    input,
+    select {
+      font: inherit;
+    }
+
+    button {
+      cursor: pointer;
+    }
+
+    .shell {
+      display: grid;
+      grid-template-columns: 252px minmax(0, 1fr);
+      min-height: 100vh;
+    }
+
+    .side {
+      position: sticky;
+      top: 0;
+      height: 100vh;
+      padding: 24px 18px;
+      color: #eef3f6;
+      background:
+        linear-gradient(180deg, rgba(255, 255, 255, 0.05), transparent 28%),
+        var(--charcoal);
+      border-right: 1px solid #0e1014;
+    }
+
+    .brand {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      margin-bottom: 28px;
+    }
+
+    .mark {
+      display: grid;
+      place-items: center;
+      width: 36px;
+      height: 36px;
+      color: #06110e;
+      background: #9af0cc;
+      border: 1px solid rgba(255, 255, 255, 0.28);
+      border-radius: 7px;
+      font-weight: 800;
+    }
+
+    .brand strong {
+      display: block;
+      font-size: 18px;
+      line-height: 1;
+    }
+
+    .brand span {
+      display: block;
+      margin-top: 4px;
+      color: #9ba6b2;
+      font-size: 12px;
+    }
+
+    .nav {
+      display: grid;
+      gap: 6px;
+    }
+
+    .nav button {
+      display: grid;
+      grid-template-columns: 22px 1fr auto;
+      align-items: center;
+      gap: 10px;
+      width: 100%;
+      min-height: 42px;
+      padding: 0 10px;
+      color: #ccd4dc;
+      background: transparent;
+      border: 1px solid transparent;
+      border-radius: var(--radius);
+      text-align: left;
+    }
+
+    .nav button.active,
+    .nav button:hover {
+      color: #ffffff;
+      background: rgba(255, 255, 255, 0.08);
+      border-color: rgba(255, 255, 255, 0.11);
+    }
+
+    .nav svg,
+    .icon-button svg,
+    .small-icon {
+      width: 18px;
+      height: 18px;
+      stroke: currentColor;
+      stroke-width: 2;
+      fill: none;
+      stroke-linecap: round;
+      stroke-linejoin: round;
+    }
+
+    .nav .count {
+      color: #0a1914;
+      background: #9af0cc;
+      border-radius: 99px;
+      padding: 2px 7px;
+      font-size: 11px;
+      font-weight: 800;
+    }
+
+    .side-status {
+      position: absolute;
+      left: 18px;
+      right: 18px;
+      bottom: 18px;
+      padding: 14px;
+      background: rgba(255, 255, 255, 0.07);
+      border: 1px solid rgba(255, 255, 255, 0.12);
+      border-radius: var(--radius);
+    }
+
+    .status-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      margin-bottom: 10px;
+      color: #dde5ec;
+      font-size: 13px;
+    }
+
+    .status-row:last-child {
+      margin-bottom: 0;
+    }
+
+    .dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: #9af0cc;
+      box-shadow: 0 0 0 5px rgba(154, 240, 204, 0.12);
+    }
+
+    .main {
+      min-width: 0;
+      padding: 20px;
+    }
+
+    .topbar {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 18px;
+      margin-bottom: 18px;
+    }
+
+    .mobile-brand {
+      display: none;
+      align-items: center;
+      gap: 10px;
+      min-width: 0;
+    }
+
+    .eyebrow {
+      color: var(--muted);
+      font-size: 12px;
+      text-transform: uppercase;
+      font-weight: 800;
+    }
+
+    h1 {
+      margin: 3px 0 0;
+      font-size: clamp(24px, 4vw, 38px);
+      line-height: 1.02;
+      font-weight: 800;
+      letter-spacing: 0;
+    }
+
+    .top-actions {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      flex-wrap: wrap;
+      justify-content: flex-end;
+    }
+
+    .action,
+    .icon-button,
+    .segmented button {
+      border: 1px solid var(--line);
+      background: rgba(255, 255, 255, 0.78);
+      border-radius: var(--radius);
+      color: var(--ink);
+    }
+
+    .action {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      min-height: 38px;
+      padding: 0 13px;
+      font-weight: 800;
+    }
+
+    .action.primary {
+      color: #ffffff;
+      background: var(--ink);
+      border-color: var(--ink);
+    }
+
+    .icon-button {
+      display: grid;
+      place-items: center;
+      width: 38px;
+      height: 38px;
+    }
+
+    .grid {
+      display: grid;
+      grid-template-columns: minmax(0, 1.35fr) minmax(340px, 0.65fr);
+      gap: 16px;
+      align-items: start;
+    }
+
+    .panel {
+      background: rgba(255, 255, 255, 0.9);
+      border: 1px solid rgba(196, 205, 215, 0.9);
+      border-radius: var(--radius);
+      box-shadow: var(--shadow);
+    }
+
+    .summary {
+      position: relative;
+      overflow: hidden;
+      padding: 20px;
+      background:
+        linear-gradient(135deg, rgba(255, 255, 255, 0.94), rgba(255, 255, 255, 0.74)),
+        repeating-linear-gradient(-45deg, rgba(38, 93, 255, 0.05) 0 1px, transparent 1px 10px);
+    }
+
+    .summary-head {
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      gap: 18px;
+      margin-bottom: 18px;
+    }
+
+    .total {
+      display: grid;
+      gap: 8px;
+    }
+
+    .total-label {
+      color: var(--muted);
+      font-size: 13px;
+      font-weight: 800;
+    }
+
+    .total-value {
+      font-family: "Georgia", "Times New Roman", serif;
+      font-size: clamp(36px, 7vw, 68px);
+      line-height: 0.92;
+      font-weight: 700;
+      letter-spacing: 0;
+    }
+
+    .total-meta {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      color: var(--muted);
+      font-size: 13px;
+    }
+
+    .pill {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      max-width: 100%;
+      min-height: 26px;
+      padding: 0 9px;
+      border-radius: 999px;
+      background: var(--paper-2);
+      color: var(--muted);
+      font-size: 12px;
+      font-weight: 800;
+      white-space: nowrap;
+    }
+
+    .pill.green {
+      color: var(--green);
+      background: var(--green-soft);
+    }
+
+    .pill.red {
+      color: var(--red);
+      background: var(--red-soft);
+    }
+
+    .pill.blue {
+      color: var(--blue);
+      background: var(--blue-soft);
+    }
+
+    .pill.amber {
+      color: var(--amber);
+      background: var(--amber-soft);
+    }
+
+    .segmented {
+      display: inline-grid;
+      grid-template-columns: repeat(3, 1fr);
+      padding: 3px;
+      background: #eef2f5;
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+    }
+
+    .segmented button {
+      min-width: 58px;
+      min-height: 30px;
+      padding: 0 10px;
+      border: 0;
+      background: transparent;
+      color: var(--muted);
+      font-size: 12px;
+      font-weight: 800;
+    }
+
+    .segmented button.active {
+      color: var(--ink);
+      background: #ffffff;
+      box-shadow: 0 4px 14px rgba(18, 20, 23, 0.12);
+    }
+
+    .metric-row {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 10px;
+    }
+
+    .metric {
+      padding: 14px;
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      background: rgba(255, 255, 255, 0.84);
+    }
+
+    .metric span {
+      display: block;
+      color: var(--muted);
+      font-size: 12px;
+      font-weight: 800;
+    }
+
+    .metric strong {
+      display: block;
+      margin-top: 8px;
+      font-family: "Georgia", "Times New Roman", serif;
+      font-size: clamp(22px, 3vw, 32px);
+      line-height: 1;
+      letter-spacing: 0;
+    }
+
+    .metric small {
+      display: block;
+      margin-top: 7px;
+      color: var(--muted);
+      font-size: 12px;
+    }
+
+    .accounts {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 10px;
+      margin-top: 16px;
+    }
+
+    .account-card {
+      min-width: 0;
+      padding: 14px;
+      background: var(--panel);
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      text-align: left;
+      transition: transform 160ms ease, border-color 160ms ease, box-shadow 160ms ease;
+    }
+
+    .account-card:hover,
+    .account-card.active {
+      transform: translateY(-2px);
+      border-color: rgba(38, 93, 255, 0.55);
+      box-shadow: 0 12px 24px rgba(38, 93, 255, 0.12);
+    }
+
+    .account-top {
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      gap: 10px;
+      margin-bottom: 14px;
+    }
+
+    .broker {
+      display: flex;
+      align-items: center;
+      gap: 9px;
+      min-width: 0;
+    }
+
+    .broker-logo {
+      display: grid;
+      place-items: center;
+      width: 34px;
+      height: 34px;
+      flex: 0 0 auto;
+      border-radius: 7px;
+      background: var(--ink);
+      color: #ffffff;
+      font-size: 12px;
+      font-weight: 900;
+    }
+
+    .broker-logo.lb {
+      background: var(--blue);
+    }
+
+    .broker-logo.ft {
+      background: var(--green);
+    }
+
+    .broker-name {
+      display: block;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+      font-weight: 900;
+      font-size: 14px;
+    }
+
+    .broker-id {
+      display: block;
+      margin-top: 3px;
+      color: var(--muted);
+      font-size: 12px;
+    }
+
+    .account-value {
+      font-family: "Georgia", "Times New Roman", serif;
+      font-size: 26px;
+      line-height: 1;
+      font-weight: 700;
+    }
+
+    .account-foot {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 10px;
+      margin-top: 10px;
+      color: var(--muted);
+      font-size: 12px;
+    }
+
+    .spark {
+      width: 72px;
+      height: 26px;
+      flex: 0 0 auto;
+    }
+
+    .section {
+      padding: 16px;
+    }
+
+    .section-head {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+      margin-bottom: 12px;
+    }
+
+    .section-title {
+      display: flex;
+      align-items: baseline;
+      gap: 8px;
+      min-width: 0;
+    }
+
+    .section-title h2 {
+      margin: 0;
+      font-size: 18px;
+      line-height: 1;
+    }
+
+    .section-title span {
+      color: var(--muted);
+      font-size: 12px;
+      font-weight: 800;
+    }
+
+    .connection-list {
+      display: grid;
+      gap: 8px;
+    }
+
+    .connection {
+      display: grid;
+      grid-template-columns: 1fr auto;
+      gap: 12px;
+      align-items: center;
+      padding: 12px;
+      background: #fbfcfd;
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+    }
+
+    .connection strong {
+      display: block;
+      font-size: 14px;
+    }
+
+    .connection span {
+      display: block;
+      margin-top: 3px;
+      color: var(--muted);
+      font-size: 12px;
+    }
+
+    .change-board {
+      margin-top: 16px;
+      padding-top: 14px;
+      border-top: 1px solid var(--line);
+    }
+
+    .bars {
+      display: grid;
+      gap: 10px;
+    }
+
+    .bar-row {
+      display: grid;
+      grid-template-columns: 86px 1fr 58px;
+      gap: 10px;
+      align-items: center;
+      color: var(--muted);
+      font-size: 12px;
+      font-weight: 800;
+    }
+
+    .bar-track {
+      position: relative;
+      height: 9px;
+      overflow: hidden;
+      background: #edf1f4;
+      border-radius: 99px;
+    }
+
+    .bar-fill {
+      position: absolute;
+      inset: 0 auto 0 0;
+      width: var(--w);
+      background: var(--green);
+      border-radius: 99px;
+    }
+
+    .bar-fill.red {
+      background: var(--red);
+    }
+
+    .positions {
+      margin-top: 16px;
+    }
+
+    .toolbar {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+      flex-wrap: wrap;
+      margin-bottom: 10px;
+    }
+
+    .search {
+      position: relative;
+      flex: 1 1 220px;
+    }
+
+    .search svg {
+      position: absolute;
+      top: 10px;
+      left: 11px;
+      width: 18px;
+      height: 18px;
+      color: var(--muted);
+    }
+
+    .search input {
+      width: 100%;
+      min-height: 38px;
+      padding: 0 12px 0 38px;
+      color: var(--ink);
+      background: #ffffff;
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      outline: 0;
+    }
+
+    .position-table {
+      overflow: hidden;
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      background: #ffffff;
+    }
+
+    .position-row {
+      display: grid;
+      grid-template-columns: minmax(150px, 1.2fr) minmax(88px, 0.6fr) minmax(110px, 0.7fr) minmax(86px, 0.55fr) 36px;
+      align-items: center;
+      gap: 10px;
+      min-height: 58px;
+      padding: 0 12px;
+      border-bottom: 1px solid var(--line);
+    }
+
+    .position-row:last-child {
+      border-bottom: 0;
+    }
+
+    .position-row.header {
+      min-height: 38px;
+      color: var(--muted);
+      background: #f7f9fa;
+      font-size: 11px;
+      font-weight: 900;
+      text-transform: uppercase;
+    }
+
+    .symbol strong {
+      display: block;
+      font-size: 15px;
+    }
+
+    .symbol span,
+    .subtle {
+      display: block;
+      margin-top: 3px;
+      color: var(--muted);
+      font-size: 12px;
+    }
+
+    .money {
+      font-family: "Georgia", "Times New Roman", serif;
+      font-size: 17px;
+      font-weight: 700;
+      text-align: right;
+    }
+
+    .num {
+      text-align: right;
+      font-variant-numeric: tabular-nums;
+    }
+
+    .account-chips {
+      display: flex;
+      flex-wrap: wrap;
+      justify-content: flex-end;
+      gap: 5px;
+    }
+
+    .chip {
+      display: inline-flex;
+      align-items: center;
+      min-height: 23px;
+      padding: 0 7px;
+      color: var(--muted);
+      background: #eef2f5;
+      border: 1px solid #dde4eb;
+      border-radius: 99px;
+      font-size: 11px;
+      font-weight: 900;
+    }
+
+    .expand {
+      display: grid;
+      place-items: center;
+      width: 30px;
+      height: 30px;
+      border: 1px solid transparent;
+      background: transparent;
+      border-radius: 6px;
+      color: var(--muted);
+    }
+
+    .expand:hover {
+      background: #eef2f5;
+      color: var(--ink);
+    }
+
+    .detail {
+      display: none;
+      grid-column: 1 / -1;
+      margin: 0 -12px;
+      padding: 12px;
+      background: #fbfcfd;
+      border-top: 1px solid var(--line);
+    }
+
+    .position-row.open {
+      min-height: auto;
+      padding-top: 12px;
+      padding-bottom: 0;
+    }
+
+    .position-row.open .detail {
+      display: block;
+    }
+
+    .lots {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 8px;
+    }
+
+    .lot {
+      padding: 10px;
+      background: #ffffff;
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+    }
+
+    .lot strong {
+      display: block;
+      font-size: 13px;
+    }
+
+    .lot span {
+      display: block;
+      margin-top: 5px;
+      color: var(--muted);
+      font-size: 12px;
+    }
+
+    .drawer {
+      position: fixed;
+      right: 20px;
+      bottom: 20px;
+      width: min(390px, calc(100vw - 40px));
+      z-index: 10;
+      overflow: hidden;
+    }
+
+    .draft-head {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      padding: 14px 16px;
+      color: #ffffff;
+      background: var(--ink);
+    }
+
+    .draft-head strong {
+      display: block;
+      font-size: 15px;
+    }
+
+    .draft-head span {
+      display: block;
+      margin-top: 3px;
+      color: #aeb8c2;
+      font-size: 12px;
+    }
+
+    .draft-body {
+      padding: 14px;
+      background: #ffffff;
+    }
+
+    .order-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 8px;
+    }
+
+    .field {
+      display: grid;
+      gap: 6px;
+    }
+
+    .field label {
+      color: var(--muted);
+      font-size: 11px;
+      font-weight: 900;
+      text-transform: uppercase;
+    }
+
+    .field input,
+    .field select {
+      min-height: 38px;
+      width: 100%;
+      padding: 0 10px;
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      background: #fbfcfd;
+      color: var(--ink);
+      outline: 0;
+    }
+
+    .risk-line {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      margin-top: 12px;
+      padding: 10px;
+      background: var(--green-soft);
+      border: 1px solid #b8decf;
+      border-radius: var(--radius);
+      color: var(--green);
+      font-size: 12px;
+      font-weight: 900;
+    }
+
+    .draft-actions {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 8px;
+      margin-top: 12px;
+    }
+
+    .bottom-nav {
+      display: none;
+    }
+
+    @media (max-width: 1120px) {
+      .shell {
+        grid-template-columns: 1fr;
+      }
+
+      .side {
+        display: none;
+      }
+
+      .main {
+        padding-bottom: 92px;
+      }
+
+      .mobile-brand {
+        display: flex;
+      }
+
+      .desktop-title {
+        display: none;
+      }
+
+      .bottom-nav {
+        position: fixed;
+        left: 12px;
+        right: 12px;
+        bottom: 12px;
+        z-index: 20;
+        display: grid;
+        grid-template-columns: repeat(4, 1fr);
+        gap: 4px;
+        padding: 6px;
+        background: rgba(32, 36, 42, 0.96);
+        border: 1px solid rgba(255, 255, 255, 0.12);
+        border-radius: var(--radius);
+        box-shadow: 0 18px 38px rgba(18, 20, 23, 0.28);
+      }
+
+      .bottom-nav button {
+        display: grid;
+        place-items: center;
+        gap: 3px;
+        min-height: 48px;
+        color: #cbd4dc;
+        background: transparent;
+        border: 0;
+        border-radius: 7px;
+        font-size: 10px;
+        font-weight: 800;
+      }
+
+      .bottom-nav button.active {
+        color: #ffffff;
+        background: rgba(255, 255, 255, 0.1);
+      }
+    }
+
+    @media (max-width: 920px) {
+      .grid {
+        grid-template-columns: 1fr;
+      }
+
+      .accounts,
+      .metric-row {
+        grid-template-columns: 1fr;
+      }
+
+      .drawer {
+        position: static;
+        width: 100%;
+        margin-top: 16px;
+      }
+    }
+
+    @media (max-width: 700px) {
+      .main {
+        padding: 14px;
+        padding-bottom: 88px;
+      }
+
+      .topbar {
+        align-items: flex-start;
+      }
+
+      .top-actions .action:not(.primary),
+      .top-actions .icon-button {
+        display: none;
+      }
+
+      .summary,
+      .section {
+        padding: 14px;
+      }
+
+      .summary-head {
+        display: grid;
+      }
+
+      .segmented {
+        width: 100%;
+      }
+
+      .position-row {
+        grid-template-columns: 1fr 88px 32px;
+        min-height: 64px;
+      }
+
+      .position-row.header {
+        display: none;
+      }
+
+      .position-row > .num:nth-child(2),
+      .position-row > .account-chips {
+        display: none;
+      }
+
+      .money {
+        font-size: 15px;
+      }
+
+      .lots {
+        grid-template-columns: 1fr;
+      }
+
+      .order-grid {
+        grid-template-columns: 1fr;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="shell">
+    <aside class="side" aria-label="Main navigation">
+      <div class="brand">
+        <div class="mark">BG</div>
+        <div>
+          <strong>BrokerGate</strong>
+          <span>Control plane</span>
+        </div>
+      </div>
+
+      <nav class="nav">
+        <button class="active" type="button">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 12h6V4H4z"/><path d="M14 20h6V4h-6z"/><path d="M4 20h6v-4H4z"/></svg>
+          Assets
+          <span class="count">4</span>
+        </button>
+        <button type="button">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 7h12"/><path d="M6 12h12"/><path d="M6 17h7"/></svg>
+          Positions
+          <span></span>
+        </button>
+        <button type="button">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 17 17 7"/><path d="M7 7h10v10"/></svg>
+          Orders
+          <span></span>
+        </button>
+        <button type="button">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v18"/><path d="M5 8h14"/><path d="M5 16h14"/></svg>
+          Accounts
+          <span></span>
+        </button>
+      </nav>
+
+      <div class="side-status">
+        <div class="status-row"><span>Gateway</span><span class="dot" aria-hidden="true"></span></div>
+        <div class="status-row"><span>Paper mode</span><strong>On</strong></div>
+        <div class="status-row"><span>Last sync</span><strong>09:42</strong></div>
+      </div>
+    </aside>
+
+    <main class="main">
+      <header class="topbar">
+        <div class="mobile-brand">
+          <div class="mark">BG</div>
+          <div>
+            <div class="eyebrow">Live dashboard</div>
+            <h1>Assets</h1>
+          </div>
+        </div>
+        <div class="desktop-title">
+          <div class="eyebrow">Live dashboard</div>
+          <h1>Multi-account assets</h1>
+        </div>
+        <div class="top-actions">
+          <button class="icon-button" type="button" title="Refresh">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M21 12a9 9 0 0 1-15.5 6.3"/><path d="M3 12A9 9 0 0 1 18.5 5.7"/><path d="M18 2v4h4"/><path d="M6 22v-4H2"/></svg>
+          </button>
+          <button class="action" type="button">
+            <svg class="small-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14"/><path d="M5 12h14"/></svg>
+            Add account
+          </button>
+          <button class="action primary" type="button">
+            <svg class="small-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M7 17 17 7"/><path d="M7 7h10v10"/></svg>
+            New order
+          </button>
+        </div>
+      </header>
+
+      <div class="grid">
+        <div>
+          <section class="panel summary" aria-label="Portfolio summary">
+            <div class="summary-head">
+              <div class="total">
+                <span class="total-label">Aggregated assets</span>
+                <strong class="total-value">USD 184,320</strong>
+                <div class="total-meta">
+                  <span class="pill green">+1.84% today</span>
+                  <span class="pill">HKD 938,400 separate</span>
+                  <span class="pill blue">4 accounts</span>
+                </div>
+              </div>
+              <div class="segmented" aria-label="Time range">
+                <button class="active" type="button">1D</button>
+                <button type="button">1W</button>
+                <button type="button">1M</button>
+              </div>
+            </div>
+
+            <div class="metric-row">
+              <div class="metric">
+                <span>Cash</span>
+                <strong>USD 28,940</strong>
+                <small>HKD 126,500</small>
+              </div>
+              <div class="metric">
+                <span>Buying power</span>
+                <strong>Account scoped</strong>
+                <small>Display only</small>
+              </div>
+              <div class="metric">
+                <span>Connection</span>
+                <strong>3 / 4</strong>
+                <small>One account stale</small>
+              </div>
+            </div>
+
+            <div class="accounts" aria-label="Broker accounts">
+              <button class="account-card active" type="button" data-account="all">
+                <div class="account-top">
+                  <div class="broker">
+                    <span class="broker-logo">TG</span>
+                    <span>
+                      <span class="broker-name">Tiger Main</span>
+                      <span class="broker-id">U***4281</span>
+                    </span>
+                  </div>
+                  <span class="pill green">ready</span>
+                </div>
+                <div class="account-value">USD 96,220</div>
+                <div class="account-foot">
+                  <span>+2.1% today</span>
+                  <svg class="spark" viewBox="0 0 90 32" aria-hidden="true">
+                    <path d="M2 24 L14 21 L24 22 L38 15 L50 18 L64 9 L78 12 L88 5" stroke="#167a59" stroke-width="3" fill="none"/>
+                  </svg>
+                </div>
+              </button>
+
+              <button class="account-card" type="button" data-account="longbridge">
+                <div class="account-top">
+                  <div class="broker">
+                    <span class="broker-logo lb">LB</span>
+                    <span>
+                      <span class="broker-name">Longbridge HK</span>
+                      <span class="broker-id">LB***7730</span>
+                    </span>
+                  </div>
+                  <span class="pill green">ready</span>
+                </div>
+                <div class="account-value">HKD 938,400</div>
+                <div class="account-foot">
+                  <span>+0.8% today</span>
+                  <svg class="spark" viewBox="0 0 90 32" aria-hidden="true">
+                    <path d="M2 20 L14 18 L26 19 L40 13 L52 16 L66 11 L78 7 L88 9" stroke="#265dff" stroke-width="3" fill="none"/>
+                  </svg>
+                </div>
+              </button>
+
+              <button class="account-card" type="button" data-account="company">
+                <div class="account-top">
+                  <div class="broker">
+                    <span class="broker-logo">TG</span>
+                    <span>
+                      <span class="broker-name">Tiger Company</span>
+                      <span class="broker-id">U***9910</span>
+                    </span>
+                  </div>
+                  <span class="pill amber">stale</span>
+                </div>
+                <div class="account-value">USD 88,100</div>
+                <div class="account-foot">
+                  <span>-0.4% today</span>
+                  <svg class="spark" viewBox="0 0 90 32" aria-hidden="true">
+                    <path d="M2 10 L16 12 L28 9 L42 16 L55 14 L68 20 L80 19 L88 24" stroke="#b54545" stroke-width="3" fill="none"/>
+                  </svg>
+                </div>
+              </button>
+            </div>
+          </section>
+
+          <section class="panel section positions" aria-label="Positions">
+            <div class="section-head">
+              <div class="section-title">
+                <h2>Positions</h2>
+                <span>Grouped by symbol</span>
+              </div>
+              <span class="pill blue">11 holdings</span>
+            </div>
+
+            <div class="toolbar">
+              <div class="search">
+                <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
+                <input id="positionSearch" type="search" placeholder="Search symbol" />
+              </div>
+              <div class="segmented" aria-label="Position view">
+                <button class="active" type="button">All</button>
+                <button type="button">US</button>
+                <button type="button">HK</button>
+              </div>
+            </div>
+
+            <div class="position-table" id="positionTable">
+              <div class="position-row header">
+                <div>Symbol</div>
+                <div class="num">Quantity</div>
+                <div class="money">Market value</div>
+                <div class="num">Accounts</div>
+                <div></div>
+              </div>
+
+              <div class="position-row" data-symbol="AAPL">
+                <div class="symbol"><strong>AAPL</strong><span>Apple Inc.</span></div>
+                <div class="num">72</div>
+                <div class="money">USD 14,832</div>
+                <div class="account-chips"><span class="chip">TG Main</span><span class="chip">TG Co</span></div>
+                <button class="expand" type="button" title="Expand">+</button>
+                <div class="detail">
+                  <div class="lots">
+                    <div class="lot"><strong>Tiger Main</strong><span>42 shares, cost 188.20</span></div>
+                    <div class="lot"><strong>Tiger Company</strong><span>30 shares, cost 196.10</span></div>
+                    <div class="lot"><strong>Risk</strong><span>Trade from selected account only</span></div>
+                  </div>
+                </div>
+              </div>
+
+              <div class="position-row" data-symbol="700.HK">
+                <div class="symbol"><strong>700.HK</strong><span>Tencent Holdings</span></div>
+                <div class="num">900</div>
+                <div class="money">HKD 342,000</div>
+                <div class="account-chips"><span class="chip">LB HK</span></div>
+                <button class="expand" type="button" title="Expand">+</button>
+                <div class="detail">
+                  <div class="lots">
+                    <div class="lot"><strong>Longbridge HK</strong><span>900 shares, cost 368.00</span></div>
+                    <div class="lot"><strong>Cash</strong><span>HKD 126,500 available</span></div>
+                    <div class="lot"><strong>Status</strong><span>Live query, paper trade</span></div>
+                  </div>
+                </div>
+              </div>
+
+              <div class="position-row" data-symbol="NVDA">
+                <div class="symbol"><strong>NVDA</strong><span>NVIDIA Corp.</span></div>
+                <div class="num">38</div>
+                <div class="money">USD 47,120</div>
+                <div class="account-chips"><span class="chip">TG Main</span></div>
+                <button class="expand" type="button" title="Expand">+</button>
+                <div class="detail">
+                  <div class="lots">
+                    <div class="lot"><strong>Tiger Main</strong><span>38 shares, cost 1,020.00</span></div>
+                    <div class="lot"><strong>Day P/L</strong><span class="subtle">+USD 1,340</span></div>
+                    <div class="lot"><strong>Updated</strong><span>09:42</span></div>
+                  </div>
+                </div>
+              </div>
+
+              <div class="position-row" data-symbol="2800.HK">
+                <div class="symbol"><strong>2800.HK</strong><span>Tracker Fund of HK</span></div>
+                <div class="num">4,000</div>
+                <div class="money">HKD 74,600</div>
+                <div class="account-chips"><span class="chip">LB HK</span></div>
+                <button class="expand" type="button" title="Expand">+</button>
+                <div class="detail">
+                  <div class="lots">
+                    <div class="lot"><strong>Longbridge HK</strong><span>4,000 units, cost 17.82</span></div>
+                    <div class="lot"><strong>Currency</strong><span>HKD only</span></div>
+                    <div class="lot"><strong>Updated</strong><span>09:39</span></div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </section>
+        </div>
+
+        <aside>
+          <section class="panel section" aria-label="Broker connections">
+            <div class="section-head">
+              <div class="section-title">
+                <h2>Connections</h2>
+                <span>Broker status</span>
+              </div>
+              <button class="icon-button" type="button" title="Refresh connections">
+                <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M21 12a9 9 0 0 1-15.5 6.3"/><path d="M3 12A9 9 0 0 1 18.5 5.7"/><path d="M18 2v4h4"/><path d="M6 22v-4H2"/></svg>
+              </button>
+            </div>
+
+            <div class="connection-list">
+              <div class="connection">
+                <div><strong>Tiger Main</strong><span>paper-ready, U***4281</span></div>
+                <span class="pill green">online</span>
+              </div>
+              <div class="connection">
+                <div><strong>Longbridge HK</strong><span>live-query, LB***7730</span></div>
+                <span class="pill green">online</span>
+              </div>
+              <div class="connection">
+                <div><strong>Tiger Company</strong><span>last snapshot 19m ago</span></div>
+                <span class="pill amber">stale</span>
+              </div>
+              <div class="connection">
+                <div><strong>Futu</strong><span>adapter planned</span></div>
+                <span class="pill">planned</span>
+              </div>
+            </div>
+
+            <div class="change-board">
+              <div class="section-title" style="margin-bottom: 12px;">
+                <h2>Asset change</h2>
+                <span>By account</span>
+              </div>
+              <div class="bars">
+                <div class="bar-row">
+                  <span>Tiger Main</span>
+                  <span class="bar-track"><span class="bar-fill" style="--w: 78%;"></span></span>
+                  <span>+2.1%</span>
+                </div>
+                <div class="bar-row">
+                  <span>Longbridge</span>
+                  <span class="bar-track"><span class="bar-fill" style="--w: 52%;"></span></span>
+                  <span>+0.8%</span>
+                </div>
+                <div class="bar-row">
+                  <span>Tiger Co</span>
+                  <span class="bar-track"><span class="bar-fill red" style="--w: 24%;"></span></span>
+                  <span>-0.4%</span>
+                </div>
+              </div>
+            </div>
+          </section>
+
+          <section class="panel drawer" aria-label="Order draft">
+            <div class="draft-head">
+              <div>
+                <strong>Order draft</strong>
+                <span>Account-scoped confirmation</span>
+              </div>
+              <span class="pill green">risk pass</span>
+            </div>
+            <div class="draft-body">
+              <div class="order-grid">
+                <div class="field">
+                  <label for="orderAccount">Account</label>
+                  <select id="orderAccount">
+                    <option>Tiger Main</option>
+                    <option>Longbridge HK</option>
+                    <option>Tiger Company</option>
+                  </select>
+                </div>
+                <div class="field">
+                  <label for="side">Side</label>
+                  <select id="side">
+                    <option>Buy</option>
+                    <option>Sell</option>
+                  </select>
+                </div>
+                <div class="field">
+                  <label for="symbol">Symbol</label>
+                  <input id="symbol" value="AAPL" />
+                </div>
+                <div class="field">
+                  <label for="quantity">Quantity</label>
+                  <input id="quantity" value="10" />
+                </div>
+                <div class="field">
+                  <label for="type">Type</label>
+                  <select id="type">
+                    <option>Limit</option>
+                    <option>Market</option>
+                  </select>
+                </div>
+                <div class="field">
+                  <label for="price">Limit price</label>
+                  <input id="price" value="205.10" />
+                </div>
+              </div>
+
+              <div class="risk-line">
+                <span>Buying power checked on Tiger Main</span>
+                <span>USD 2,051</span>
+              </div>
+
+              <div class="draft-actions">
+                <button class="action" type="button">Preview</button>
+                <button class="action primary" type="button">Create draft</button>
+              </div>
+            </div>
+          </section>
+        </aside>
+      </div>
+    </main>
+  </div>
+
+  <nav class="bottom-nav" aria-label="Mobile navigation">
+    <button class="active" type="button">
+      <svg class="small-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 12h6V4H4z"/><path d="M14 20h6V4h-6z"/><path d="M4 20h6v-4H4z"/></svg>
+      Assets
+    </button>
+    <button type="button">
+      <svg class="small-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 7h12"/><path d="M6 12h12"/><path d="M6 17h7"/></svg>
+      Positions
+    </button>
+    <button type="button">
+      <svg class="small-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M7 17 17 7"/><path d="M7 7h10v10"/></svg>
+      Orders
+    </button>
+    <button type="button">
+      <svg class="small-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14"/><path d="M5 12h14"/></svg>
+      Account
+    </button>
+  </nav>
+
+  <script>
+    const cards = document.querySelectorAll(".account-card");
+    const rows = document.querySelectorAll(".position-row:not(.header)");
+    const search = document.getElementById("positionSearch");
+
+    cards.forEach((card) => {
+      card.addEventListener("click", () => {
+        cards.forEach((item) => item.classList.remove("active"));
+        card.classList.add("active");
+      });
+    });
+
+    document.querySelectorAll(".expand").forEach((button) => {
+      button.addEventListener("click", () => {
+        const row = button.closest(".position-row");
+        const isOpen = row.classList.toggle("open");
+        button.textContent = isOpen ? "-" : "+";
+      });
+    });
+
+    search.addEventListener("input", () => {
+      const query = search.value.trim().toUpperCase();
+      rows.forEach((row) => {
+        const symbol = row.dataset.symbol || "";
+        row.style.display = symbol.includes(query) ? "grid" : "none";
+      });
+    });
+  </script>
+</body>
+</html>

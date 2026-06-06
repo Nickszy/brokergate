@@ -7,9 +7,21 @@ __pycache__/
 .env
 .env.*
 !.env.example
+!web/.env.example
 dist/
 build/
 *.egg-info/
 .coverage
 htmlcov/
+.playwright-mcp/
 
+# Node / Next.js web frontend
+node_modules/
+.next/
+out/
+.vercel/
+web/node_modules/
+web/.next/
+web/out/
+web/.vercel/
+web/tsconfig.tsbuildinfo
