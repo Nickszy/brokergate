@@ -1,0 +1,42 @@
+services:
+  - type: web
+    name: brokergate-api
+    runtime: docker
+    plan: free
+    dockerfilePath: ./Dockerfile
+    healthCheckPath: /health
+    envVars:
+      - key: BROKERGATE_ENV
+        value: production
+      - key: BROKERGATE_API_KEY
+        generateValue: true
+      - key: BROKERGATE_CONFIRMATION_REQUIRED
+        value: "true"
+      - key: BROKERGATE_BROKER_MODE
+        value: paper
+      - key: BROKERGATE_TIGER_ENABLED
+        value: "false"
+      - key: BROKERGATE_TIGER_ACCOUNT
+        sync: false
+      - key: BROKERGATE_TIGER_ID
+        sync: false
+      - key: BROKERGATE_TIGER_LICENSE
+        sync: false
+      - key: BROKERGATE_TIGER_PRIVATE_KEY_PATH
+        sync: false
+      - key: BROKERGATE_TIGER_CONFIG_DIR
+        sync: false
+      - key: BROKERGATE_TIGER_TOKEN_PATH
+        sync: false
+      - key: BROKERGATE_LONGBRIDGE_ENABLED
+        value: "false"
+      - key: BROKERGATE_LONGBRIDGE_APP_KEY
+        sync: false
+      - key: BROKERGATE_LONGBRIDGE_APP_SECRET
+        sync: false
+      - key: BROKERGATE_LONGBRIDGE_ACCESS_TOKEN
+        sync: false
+      - key: BROKERGATE_LONGBRIDGE_ACCOUNT
+        sync: false
+      - key: BROKERGATE_LONGBRIDGE_HTTP_URL
+        sync: false
