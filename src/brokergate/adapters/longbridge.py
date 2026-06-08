@@ -1,9 +1,11 @@
+import threading
 from datetime import UTC, datetime
 from decimal import Decimal
 from typing import Any
 from uuid import uuid4
 
 from brokergate.adapters.base import BrokerAdapter
+from brokergate.adapters.paper_mock import mock_market_depth, mock_quote_snapshot
 from brokergate.models import (
     AccountSummary,
     BrokerId,
@@ -11,6 +13,7 @@ from brokergate.models import (
     BrokerOrderReceipt,
     BrokerOrderStatus,
     CancelOrderRequest,
+    DepthLevel,
     ExecutionQueryFilters,
     InstrumentProfile,
     MaxTradableQuantityRequest,
@@ -20,10 +23,14 @@ from brokergate.models import (
     OrderSide,
     OrderStatus,
     OrderType,
+    OutsideRth,
     Position,
+    QuoteDepth,
     QuoteSnapshot,
     ReplaceOrderRequest,
+    TimeInForce,
     TradableQuantity,
+    TradeOrderRequest,
 )
 
 
@@ -58,8 +65,28 @@ def _safe_datetime(value: Any) -> datetime | None:
         return None
 
 
+def _enum_name(value: Any) -> str:
+    """Normalize a Longbridge SDK enum (or a test mock) to its bare variant name.
+
+    The real SDK enums are Rust/PyO3-backed: their `.name` attribute is None and
+    str() renders as "OrderStatus.Canceled", so we take the part after the dot.
+    Test mocks set `.name` to a plain string, so we honor that when present.
+    """
+    if value is None:
+        return ""
+    name = getattr(value, "name", None)
+    if isinstance(name, str) and name:
+        return name.strip().upper()
+    if value.__class__.__module__.startswith("unittest.mock"):
+        return ""
+    text = str(value)
+    if "." in text:
+        text = text.rsplit(".", 1)[-1]
+    return text.strip().upper()
+
+
 def _map_order_status(value: Any) -> BrokerOrderStatus:
-    status_name = _str_or_empty(getattr(value, "name", value)).upper()
+    status_name = _enum_name(value)
     if status_name in ("FILLED", "FULLY_FILLED"):
         return BrokerOrderStatus.filled
     if status_name in ("PARTIALFILLED", "PARTIALLY_FILLED", "PART_FILLED", "PARTIALWITHDRAWAL"):
@@ -76,12 +103,35 @@ def _map_order_status(value: Any) -> BrokerOrderStatus:
 
 
 def _map_order_side(value: Any) -> OrderSide:
-    side_name = _str_or_empty(getattr(value, "name", value)).upper()
-    return OrderSide.sell if side_name == "SELL" else OrderSide.buy
+    return OrderSide.sell if _enum_name(value) == "SELL" else OrderSide.buy
+
+
+def _map_order_type(value: Any) -> OrderType:
+    # Longbridge has many concrete types (LO/ELO/ALO/ODD/LIT/MO/AO/TSLP*...);
+    # collapse them onto the gateway's generic market/limit for reporting.
+    if _enum_name(value) in ("MO", "AO"):
+        return OrderType.market
+    return OrderType.limit
+
+
+def _currency_for_symbol(symbol: Any) -> str:
+    """Infer trading currency from a Longbridge `ticker.region` symbol.
+
+    SecurityQuote/Execution objects do not carry a currency field, so fall back
+    to the region suffix (e.g. 700.HK -> HKD, AAPL.US -> USD)."""
+    region = _str_or_empty(symbol).upper().rsplit(".", 1)[-1]
+    return {
+        "HK": "HKD",
+        "US": "USD",
+        "SG": "SGD",
+        "SH": "CNY",
+        "SZ": "CNY",
+    }.get(region, "USD")
 
 
 class LongbridgePaperAdapter(BrokerAdapter):
     broker_id = BrokerId.longbridge
+    serves_mock_market_data = True
 
     async def test_connection(self, account_id: str) -> bool:
         return True
@@ -131,9 +181,23 @@ class LongbridgePaperAdapter(BrokerAdapter):
             },
         )
 
+    async def get_quote_snapshots(self, symbols: list[str]) -> list[QuoteSnapshot]:
+        return [mock_quote_snapshot(BrokerId.longbridge, symbol) for symbol in symbols]
+
+    async def get_market_depth(self, symbol: str) -> QuoteDepth:
+        return mock_market_depth(BrokerId.longbridge, symbol)
+
 
 class LongbridgeOpenApiAdapter(BrokerAdapter):
     broker_id = BrokerId.longbridge
+
+    def __init__(self) -> None:
+        # QuoteContext opens a persistent gateway connection whose handshake
+        # costs ~4-5s. Building one per request reconnects every time and trips
+        # broker_query_timeout, so cache and reuse a single warm context
+        # (warm quote/depth calls then take ~0.3s).
+        self._quote_context_cache: Any = None
+        self._quote_context_lock = threading.Lock()
 
     def _get_longbridge_config(self) -> Any:
         from brokergate.config import settings
@@ -168,7 +232,12 @@ class LongbridgeOpenApiAdapter(BrokerAdapter):
     def _quote_context(self) -> Any:
         from longbridge.openapi import QuoteContext
 
-        return QuoteContext(self._get_longbridge_config())
+        if self._quote_context_cache is not None:
+            return self._quote_context_cache
+        with self._quote_context_lock:
+            if self._quote_context_cache is None:
+                self._quote_context_cache = QuoteContext(self._get_longbridge_config())
+            return self._quote_context_cache
 
     def _to_dict(self, obj: Any) -> Any:
         if obj.__class__.__module__.startswith("unittest.mock"):
@@ -202,10 +271,10 @@ class LongbridgeOpenApiAdapter(BrokerAdapter):
             broker_order_id=_str_or_empty(getattr(order, "order_id", None)),
             symbol=_str_or_empty(getattr(order, "symbol", None)),
             side=_map_order_side(getattr(order, "side", None)),
-            order_type=OrderType.limit,
-            quantity=_decimal_or_zero(getattr(order, "submitted_quantity", None)),
+            order_type=_map_order_type(getattr(order, "order_type", None)),
+            quantity=_decimal_or_zero(getattr(order, "quantity", None)),
             filled_quantity=_decimal_or_zero(getattr(order, "executed_quantity", None)),
-            limit_price=_decimal_or_zero(getattr(order, "submitted_price", None)) or None,
+            limit_price=_decimal_or_zero(getattr(order, "price", None)) or None,
             average_fill_price=_decimal_or_zero(getattr(order, "executed_price", None)) or None,
             status=_map_order_status(getattr(order, "status", None)),
             currency=_str_or_empty(getattr(order, "currency", None)) or "USD",
@@ -229,7 +298,8 @@ class LongbridgeOpenApiAdapter(BrokerAdapter):
                 getattr(execution, "quantity", None) or getattr(execution, "executed_quantity", None)
             ),
             price=_decimal_or_zero(getattr(execution, "price", None) or getattr(execution, "executed_price", None)),
-            currency=_str_or_empty(getattr(execution, "currency", None)) or "USD",
+            currency=_str_or_empty(getattr(execution, "currency", None))
+            or _currency_for_symbol(getattr(execution, "symbol", None)),
             executed_at=_safe_datetime(
                 getattr(execution, "executed_at", None) or getattr(execution, "trade_done_at", None)
             )
@@ -238,10 +308,11 @@ class LongbridgeOpenApiAdapter(BrokerAdapter):
         )
 
     def _quote_from_sdk(self, quote: Any) -> QuoteSnapshot:
+        symbol = _str_or_empty(getattr(quote, "symbol", None))
         return QuoteSnapshot(
             broker=BrokerId.longbridge,
-            symbol=_str_or_empty(getattr(quote, "symbol", None)),
-            currency=_str_or_empty(getattr(quote, "currency", None)) or "USD",
+            symbol=symbol,
+            currency=_str_or_empty(getattr(quote, "currency", None)) or _currency_for_symbol(symbol),
             last_price=_decimal_or_zero(getattr(quote, "last_done", None)) or None,
             open_price=_decimal_or_zero(getattr(quote, "open", None)) or None,
             high_price=_decimal_or_zero(getattr(quote, "high", None)) or None,
@@ -397,11 +468,42 @@ class LongbridgeOpenApiAdapter(BrokerAdapter):
         except Exception as e:
             raise RuntimeError(f"Failed to estimate Longbridge tradable quantity: {str(e)}") from e
 
+    def _resolve_order_type(self, request: TradeOrderRequest) -> Any:
+        """Pick the concrete Longbridge OrderType from the generic request shape."""
+        from longbridge.openapi import OrderType as LBOrderType
+
+        if request.trailing_amount is not None:
+            return LBOrderType.TSLPAMT
+        if request.trailing_percent is not None:
+            return LBOrderType.TSLPPCT
+        if request.trigger_price is not None:
+            # stop-limit when a limit price is also given, otherwise stop-market
+            return LBOrderType.LIT if request.limit_price is not None else LBOrderType.MIT
+        if request.order_type == OrderType.market:
+            return LBOrderType.MO
+        return LBOrderType.LO
+
+    def _resolve_time_in_force(self, request: TradeOrderRequest) -> Any:
+        from longbridge.openapi import TimeInForceType
+
+        if request.time_in_force == TimeInForce.gtc:
+            return TimeInForceType.GoodTilCanceled
+        if request.time_in_force == TimeInForce.gtd:
+            return TimeInForceType.GoodTilDate
+        return TimeInForceType.Day
+
+    def _resolve_outside_rth(self, request: TradeOrderRequest) -> Any:
+        from longbridge.openapi import OutsideRTH
+
+        return {
+            OutsideRth.rth_only: OutsideRTH.RTHOnly,
+            OutsideRth.any_time: OutsideRTH.AnyTime,
+            OutsideRth.overnight: OutsideRTH.Overnight,
+        }.get(request.outside_rth, OutsideRTH.RTHOnly)
+
     async def submit_order(self, draft: OrderDraft) -> BrokerOrderReceipt:
         from brokergate.config import settings
         from longbridge.openapi import OrderSide as LBOrderSide
-        from longbridge.openapi import OrderType as LBOrderType
-        from longbridge.openapi import TimeInForceType
 
         if settings.broker_mode not in ("paper", "live-trade"):
             raise ValueError(
@@ -417,18 +519,34 @@ class LongbridgeOpenApiAdapter(BrokerAdapter):
         if draft.status != OrderStatus.confirmed:
             raise ValueError("Longbridge adapter only accepts confirmed order drafts")
 
+        request = draft.request
+        if request.time_in_force == TimeInForce.gtd and request.expire_date is None:
+            raise ValueError("expire_date is required when time_in_force is gtd")
+
+        order_type = self._resolve_order_type(request)
+        kwargs: dict[str, Any] = {
+            "symbol": request.symbol,
+            "order_type": order_type,
+            "side": LBOrderSide.Buy if request.side == "buy" else LBOrderSide.Sell,
+            "submitted_quantity": Decimal(str(request.quantity)),
+            "time_in_force": self._resolve_time_in_force(request),
+            "remark": request.client_memo or "BrokerGate Trade",
+        }
+        if request.limit_price is not None:
+            kwargs["submitted_price"] = Decimal(str(request.limit_price))
+        if request.trigger_price is not None:
+            kwargs["trigger_price"] = Decimal(str(request.trigger_price))
+        if request.trailing_amount is not None:
+            kwargs["trailing_amount"] = Decimal(str(request.trailing_amount))
+        if request.trailing_percent is not None:
+            kwargs["trailing_percent"] = Decimal(str(request.trailing_percent))
+        if request.time_in_force == TimeInForce.gtd and request.expire_date is not None:
+            kwargs["expire_date"] = request.expire_date
+        if request.outside_rth is not None:
+            kwargs["outside_rth"] = self._resolve_outside_rth(request)
+
         try:
-            resp = self._trade_context().submit_order(
-                symbol=draft.request.symbol,
-                order_type=LBOrderType.LO,
-                side=LBOrderSide.Buy if draft.request.side == "buy" else LBOrderSide.Sell,
-                submitted_quantity=Decimal(str(draft.request.quantity)),
-                time_in_force=TimeInForceType.Day,
-                submitted_price=Decimal(str(draft.request.limit_price))
-                if draft.request.limit_price is not None
-                else None,
-                remark=draft.request.client_memo or "BrokerGate Trade",
-            )
+            resp = self._trade_context().submit_order(**kwargs)
 
             if not resp or not resp.order_id:
                 raise RuntimeError("Failed to place order: Longbridge SDK did not return an order ID")
@@ -511,10 +629,44 @@ class LongbridgeOpenApiAdapter(BrokerAdapter):
 
     async def get_quote_snapshots(self, symbols: list[str]) -> list[QuoteSnapshot]:
         try:
-            quotes = self._quote_context().realtime_quote(symbols)
+            # Use quote() (pull snapshot), NOT realtime_quote() which only returns
+            # symbols previously subscribed to the streaming feed (else empty).
+            quotes = self._quote_context().quote(symbols)
             return [self._quote_from_sdk(quote) for quote in quotes or []]
         except Exception as e:
             raise RuntimeError(f"Failed to get Longbridge quote snapshots: {str(e)}") from e
+
+    async def get_market_depth(self, symbol: str) -> QuoteDepth:
+        try:
+            book = self._quote_context().depth(symbol)
+            return QuoteDepth(
+                broker=BrokerId.longbridge,
+                symbol=symbol,
+                asks=self._depth_levels_from_sdk(getattr(book, "asks", None)),
+                bids=self._depth_levels_from_sdk(getattr(book, "bids", None)),
+                raw={"depth": self._to_dict(book)},
+            )
+        except Exception as e:
+            raise RuntimeError(f"Failed to get Longbridge market depth: {str(e)}") from e
+
+    @staticmethod
+    def _depth_levels_from_sdk(levels: Any) -> list[DepthLevel]:
+        result: list[DepthLevel] = []
+        for level in levels or []:
+            price = getattr(level, "price", None)
+            # Markets without a depth entitlement return placeholder levels with
+            # price=None / volume=0; drop them so an empty side means "no depth".
+            if price is None:
+                continue
+            order_num = getattr(level, "order_num", None)
+            result.append(
+                DepthLevel(
+                    price=_decimal_or_zero(price) or None,
+                    volume=_decimal_or_zero(getattr(level, "volume", None)),
+                    order_count=int(order_num) if order_num is not None else None,
+                )
+            )
+        return result
 
     async def get_instrument_profile(self, symbol: str) -> InstrumentProfile:
         try:

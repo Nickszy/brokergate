@@ -10,6 +10,7 @@ from brokergate.models import (
     OrderSide,
     OrderStatus,
     OrderType,
+    OutsideRth,
     ReplaceOrderRequest,
     TradeOrderRequest,
 )
@@ -119,8 +120,108 @@ async def test_tiger_adapter_submit_order(mock_config_cls, mock_client_cls):
             contract=mock_contract_obj,
             action="BUY",
             quantity=10,
-            limit_price=150.0
+            time_in_force="DAY",
+            limit_price=150.0,
         )
+
+
+@patch("tigeropen.trade.trade_client.TradeClient")
+@patch("tigeropen.tiger_open_config.TigerOpenClientConfig")
+@pytest.mark.anyio
+async def test_tiger_adapter_submit_market_order_uses_market_order(mock_config_cls, mock_client_cls):
+    req = TradeOrderRequest(
+        broker="tiger",
+        account_id="U12345",
+        symbol="AAPL",
+        side=OrderSide.sell,
+        order_type=OrderType.market,
+        quantity=Decimal("5"),
+    )
+    draft = OrderDraft(request=req, status=OrderStatus.confirmed)
+
+    mock_client = mock_client_cls.return_value
+    mock_config_cls.return_value.account = "U12345"
+
+    def mock_place_order(order):
+        order.id = 555
+
+    mock_client.place_order.side_effect = mock_place_order
+
+    adapter = TigerOpenApiAdapter()
+    with patch("tigeropen.common.util.contract_utils.stock_contract") as mock_stock_contract, \
+         patch("tigeropen.common.util.order_utils.market_order") as mock_market_order, \
+         patch("tigeropen.common.util.order_utils.limit_order") as mock_limit_order, \
+         patch("brokergate.config.settings.broker_mode", "live-trade"), \
+         patch("brokergate.config.settings.tiger_account", "U12345"):
+        mock_contract_obj = MagicMock()
+        mock_stock_contract.return_value = mock_contract_obj
+        mock_market_order.return_value = MagicMock(id=None)
+
+        receipt = await adapter.submit_order(draft)
+
+        assert receipt.broker_order_id == "555"
+        mock_market_order.assert_called_once_with(
+            account="U12345",
+            contract=mock_contract_obj,
+            action="SELL",
+            quantity=5,
+            time_in_force="DAY",
+        )
+        mock_limit_order.assert_not_called()
+
+
+@patch("tigeropen.trade.trade_client.TradeClient")
+@patch("tigeropen.tiger_open_config.TigerOpenClientConfig")
+@pytest.mark.anyio
+async def test_tiger_submit_sets_outside_rth_for_extended_hours(mock_config_cls, mock_client_cls):
+    req = TradeOrderRequest(
+        broker="tiger",
+        account_id="U12345",
+        symbol="AAPL",
+        side=OrderSide.buy,
+        order_type=OrderType.limit,
+        quantity=Decimal("1"),
+        limit_price=Decimal("150"),
+        outside_rth=OutsideRth.any_time,
+    )
+    draft = OrderDraft(request=req, status=OrderStatus.confirmed)
+
+    mock_client = mock_client_cls.return_value
+    mock_config_cls.return_value.account = "U12345"
+
+    def mock_place_order(order):
+        order.id = 4242
+
+    mock_client.place_order.side_effect = mock_place_order
+
+    order_obj = MagicMock()
+    order_obj.id = None
+    order_obj.outside_rth = False
+
+    adapter = TigerOpenApiAdapter()
+    with patch("tigeropen.common.util.contract_utils.stock_contract"), \
+         patch("tigeropen.common.util.order_utils.limit_order", return_value=order_obj), \
+         patch("brokergate.config.settings.broker_mode", "live-trade"), \
+         patch("brokergate.config.settings.tiger_account", "U12345"):
+        await adapter.submit_order(draft)
+
+    assert order_obj.outside_rth is True
+
+
+def test_tiger_map_order_type_and_side_and_status():
+    from brokergate.adapters.tiger import _map_order_side, _map_order_status, _map_order_type
+    from brokergate.models import BrokerOrderStatus
+
+    # Tiger order_type/action are plain strings; status is a Python enum (.name works).
+    assert _map_order_type("MKT") == OrderType.market
+    assert _map_order_type("LMT") == OrderType.limit
+    assert _map_order_side("SELL") == OrderSide.sell
+    assert _map_order_side("BUY") == OrderSide.buy
+
+    class _Status:
+        name = "FILLED"
+
+    assert _map_order_status(_Status()) == BrokerOrderStatus.filled
 
 
 @patch("tigeropen.trade.trade_client.TradeClient")
