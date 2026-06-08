@@ -4,6 +4,7 @@ from typing import Any
 from uuid import uuid4
 
 from brokergate.adapters.base import BrokerAdapter
+from brokergate.adapters.paper_mock import mock_market_depth, mock_quote_snapshot
 from brokergate.models import (
     AccountSummary,
     BrokerId,
@@ -11,6 +12,7 @@ from brokergate.models import (
     BrokerOrderReceipt,
     BrokerOrderStatus,
     CancelOrderRequest,
+    DepthLevel,
     ExecutionQueryFilters,
     InstrumentProfile,
     MaxTradableQuantityRequest,
@@ -22,11 +24,14 @@ from brokergate.models import (
     OrderSide,
     OrderStatus,
     OrderType,
+    OutsideRth,
     Position,
+    QuoteDepth,
     QuoteSnapshot,
     ReplaceOrderRequest,
     RiskCheckResult,
     RiskCheckStatus,
+    TimeInForce,
     TradableQuantity,
     TradeOrderRequest,
 )
@@ -45,6 +50,42 @@ def _str_or_empty(value: Any) -> str:
     if value is None or value.__class__.__module__.startswith("unittest.mock"):
         return ""
     return str(value)
+
+
+def _tiger_symbol_and_market(symbol: str) -> tuple[str, str]:
+    """Split a UI symbol into Tiger's (symbol, market) pair.
+
+    Accepts suffixed forms (``AAPL.US``/``700.HK``/``600519.SH``) and bare
+    forms, inferring the market from the suffix or the symbol shape.
+    """
+    raw = symbol.strip().upper()
+    base, _, suffix = raw.partition(".")
+    suffix_market = {"US": "US", "HK": "HK", "SH": "CN", "SS": "CN", "SZ": "CN", "CN": "CN"}
+    if suffix in suffix_market:
+        return base, suffix_market[suffix]
+    if base.isdigit():
+        # 6-digit mainland codes vs HK numeric tickers.
+        return base, "CN" if len(base) == 6 else "HK"
+    return base, "US"
+
+
+def _tiger_depth_levels(levels: Any) -> list[DepthLevel]:
+    """Map Tiger ``(price, volume, order_count)`` tuples into DepthLevel rows."""
+    result: list[DepthLevel] = []
+    for level in levels or []:
+        price = level[0] if len(level) > 0 else None
+        if price in (None, 0, 0.0):
+            continue
+        volume = level[1] if len(level) > 1 else 0
+        order_count = level[2] if len(level) > 2 else None
+        result.append(
+            DepthLevel(
+                price=_decimal_or_zero(price) or None,
+                volume=_decimal_or_zero(volume),
+                order_count=int(order_count) if order_count is not None else None,
+            )
+        )
+    return result
 
 
 def _safe_datetime(value: Any) -> datetime | None:
@@ -85,8 +126,18 @@ def _map_order_side(value: Any) -> OrderSide:
     return OrderSide.sell if side_name == "SELL" else OrderSide.buy
 
 
+def _map_order_type(value: Any) -> OrderType:
+    # Tiger reports order_type as a string like "LMT"/"MKT"/"STP"; collapse onto
+    # the gateway's generic market/limit for reporting.
+    type_name = _str_or_empty(getattr(value, "name", value)).upper()
+    if type_name in ("MKT", "MO", "MARKET", "MOO", "MOC"):
+        return OrderType.market
+    return OrderType.limit
+
+
 class TigerPaperAdapter(BrokerAdapter):
     broker_id = BrokerId.tiger
+    serves_mock_market_data = True
 
     async def test_connection(self, account_id: str) -> bool:
         return True
@@ -134,6 +185,12 @@ class TigerPaperAdapter(BrokerAdapter):
                 "quantity": str(draft.request.quantity),
             },
         )
+
+    async def get_quote_snapshots(self, symbols: list[str]) -> list[QuoteSnapshot]:
+        return [mock_quote_snapshot(BrokerId.tiger, symbol) for symbol in symbols]
+
+    async def get_market_depth(self, symbol: str) -> QuoteDepth:
+        return mock_market_depth(BrokerId.tiger, symbol)
 
 
 class TigerOpenApiAdapter(BrokerAdapter):
@@ -214,7 +271,7 @@ class TigerOpenApiAdapter(BrokerAdapter):
             broker_order_id=_str_or_empty(getattr(order, "id", None) or getattr(order, "order_id", None)),
             symbol=_str_or_empty(getattr(contract, "symbol", None)),
             side=_map_order_side(getattr(order, "action", None)),
-            order_type=OrderType.limit,
+            order_type=_map_order_type(getattr(order, "order_type", None)),
             quantity=_decimal_or_zero(getattr(order, "quantity", None)),
             filled_quantity=_decimal_or_zero(getattr(order, "filled", None)),
             limit_price=_decimal_or_zero(getattr(order, "limit_price", None)) or None,
@@ -447,9 +504,61 @@ class TigerOpenApiAdapter(BrokerAdapter):
         except Exception as e:
             raise RuntimeError(f"Failed to estimate Tiger tradable quantity: {str(e)}") from e
 
+    def _tiger_time_in_force(self, request: TradeOrderRequest) -> str:
+        if request.time_in_force == TimeInForce.gtc:
+            return "GTC"
+        if request.time_in_force == TimeInForce.gtd:
+            raise ValueError("Tiger adapter does not support GTD orders; use Day or GTC")
+        return "DAY"
+
+    def _build_order(self, request: TradeOrderRequest) -> Any:
+        """Build the right tigeropen order object from the generic request shape."""
+        from tigeropen.common.util.order_utils import (
+            limit_order,
+            market_order,
+            stop_limit_order,
+            stop_order,
+            trail_order,
+        )
+
+        contract = self._stock_contract(request.symbol, request.currency.upper())
+        common = {
+            "account": request.account_id,
+            "contract": contract,
+            "action": request.side.upper(),
+            "quantity": int(request.quantity),
+            "time_in_force": self._tiger_time_in_force(request),
+        }
+
+        if request.trailing_percent is not None:
+            order = trail_order(**common, trailing_percent=float(request.trailing_percent))
+        elif request.trailing_amount is not None:
+            order = trail_order(**common, aux_price=float(request.trailing_amount))
+        elif request.trigger_price is not None:
+            if request.limit_price is not None:
+                order = stop_limit_order(
+                    **common,
+                    limit_price=float(request.limit_price),
+                    aux_price=float(request.trigger_price),
+                )
+            else:
+                order = stop_order(**common, aux_price=float(request.trigger_price))
+        elif request.order_type == OrderType.market:
+            order = market_order(**common)
+        else:
+            if request.limit_price is None:
+                raise ValueError("Tiger limit orders require a limit_price")
+            order = limit_order(**common, limit_price=float(request.limit_price))
+
+        # Tiger expresses extended-hours trading as a boolean order attribute, not a
+        # builder param. RTH-only (or unset) keeps the SDK default (False).
+        if request.outside_rth is not None and request.outside_rth != OutsideRth.rth_only:
+            order.outside_rth = True
+
+        return order
+
     async def submit_order(self, draft: OrderDraft) -> BrokerOrderReceipt:
         from brokergate.config import settings
-        from tigeropen.common.util.order_utils import limit_order
 
         if settings.broker_mode not in ("paper", "live-trade"):
             raise ValueError(
@@ -476,18 +585,7 @@ class TigerOpenApiAdapter(BrokerAdapter):
             if draft.request.quantity % 1 != 0:
                 raise ValueError(f"Fractional quantities are not supported: {draft.request.quantity}")
 
-            currency = draft.request.currency.upper()
-            contract = self._stock_contract(draft.request.symbol, currency)
-
-            order = limit_order(
-                account=draft.request.account_id,
-                contract=contract,
-                action=draft.request.side.upper(),
-                quantity=int(draft.request.quantity),
-                limit_price=float(draft.request.limit_price)
-                if draft.request.limit_price is not None
-                else None,
-            )
+            order = self._build_order(draft.request)
 
             trade_client.place_order(order)
 
@@ -621,6 +719,24 @@ class TigerOpenApiAdapter(BrokerAdapter):
             return [self._quote_from_sdk(quote) for quote in quotes or []]
         except Exception as e:
             raise RuntimeError(f"Failed to get Tiger quote snapshots: {str(e)}") from e
+
+    async def get_market_depth(self, symbol: str) -> QuoteDepth:
+        try:
+            tiger_symbol, market = _tiger_symbol_and_market(symbol)
+            book = self._quote_client().get_depth_quote([tiger_symbol], market)
+            # get_depth_quote returns either {'symbol','asks','bids'} for one symbol
+            # or {symbol: {...}} for several. Normalise to the single-symbol shape.
+            entry = book.get(tiger_symbol) if isinstance(book, dict) and tiger_symbol in book else book
+            entry = entry if isinstance(entry, dict) else {}
+            return QuoteDepth(
+                broker=BrokerId.tiger,
+                symbol=symbol,
+                asks=_tiger_depth_levels(entry.get("asks")),
+                bids=_tiger_depth_levels(entry.get("bids")),
+                raw={"depth": book},
+            )
+        except Exception as e:
+            raise RuntimeError(f"Failed to get Tiger market depth: {str(e)}") from e
 
     async def get_instrument_profile(self, symbol: str) -> InstrumentProfile:
         try:

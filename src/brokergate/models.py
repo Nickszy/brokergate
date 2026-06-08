@@ -1,4 +1,4 @@
-﻿from datetime import UTC, datetime
+﻿from datetime import UTC, date, datetime
 from decimal import Decimal
 from enum import StrEnum
 from typing import Any
@@ -21,6 +21,18 @@ class OrderSide(StrEnum):
 class OrderType(StrEnum):
     market = "market"
     limit = "limit"
+
+
+class TimeInForce(StrEnum):
+    day = "day"
+    gtc = "gtc"  # good til canceled
+    gtd = "gtd"  # good til date (requires expire_date)
+
+
+class OutsideRth(StrEnum):
+    rth_only = "rth_only"  # regular trading hours only
+    any_time = "any_time"  # pre/post market included
+    overnight = "overnight"
 
 
 class OrderStatus(StrEnum):
@@ -74,6 +86,12 @@ class TradeOrderRequest(BaseModel):
     limit_price: Decimal | None = Field(default=None, gt=0)
     currency: str = Field(default="USD", min_length=3, max_length=3)
     client_memo: str | None = Field(default=None, max_length=500)
+    time_in_force: TimeInForce = TimeInForce.day
+    expire_date: date | None = None  # required when time_in_force is gtd
+    trigger_price: Decimal | None = Field(default=None, gt=0)  # stop/trigger (LIT/MIT)
+    trailing_amount: Decimal | None = Field(default=None, gt=0)  # trailing stop by amount
+    trailing_percent: Decimal | None = Field(default=None, gt=0)  # trailing stop by percent
+    outside_rth: OutsideRth | None = None  # US pre/post/overnight session
 
 
 class OrderQueryFilters(BaseModel):
@@ -219,6 +237,34 @@ class QuoteSnapshot(BaseModel):
     raw: dict[str, Any] = Field(default_factory=dict)
 
 
+class DepthLevel(BaseModel):
+    """A single price level in an order book (one side)."""
+
+    price: Decimal | None = None
+    volume: Decimal = Decimal("0")
+    order_count: int | None = None
+
+
+class QuoteDepth(BaseModel):
+    """Order-book depth (level-2) for a symbol: ranked ask and bid levels.
+
+    ``asks`` are ordered best (lowest) ask first; ``bids`` best (highest) bid
+    first. Levels with no price (e.g. markets without depth entitlement) are
+    dropped by the adapters, so an empty side means depth is unavailable.
+    """
+
+    broker: BrokerId
+    source_broker: BrokerId | None = None
+    fallback_from: BrokerId | None = None
+    fallback_reason: str | None = None
+    symbol: str
+    currency: str | None = None
+    asks: list[DepthLevel] = Field(default_factory=list)
+    bids: list[DepthLevel] = Field(default_factory=list)
+    timestamp: datetime | None = None
+    raw: dict[str, Any] = Field(default_factory=dict)
+
+
 class InstrumentProfile(BaseModel):
     broker: BrokerId
     source_broker: BrokerId | None = None
@@ -239,6 +285,36 @@ class AuditEvent(BaseModel):
     actor: str
     action: str
     subject: str
+    details: dict[str, Any] = Field(default_factory=dict)
+    created_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
+
+
+class DiagnosticCategory(StrEnum):
+    health_check = "health_check"
+    connection_test = "connection_test"
+    account_summary = "account_summary"
+    positions_query = "positions_query"
+    orders_query = "orders_query"
+    executions_query = "executions_query"
+    market_data = "market_data"
+
+
+class DiagnosticResult(StrEnum):
+    success = "success"
+    warning = "warning"
+    error = "error"
+
+
+class DiagnosticEvent(BaseModel):
+    """A gateway sync/connection diagnostic record surfaced on the 连接 dashboard."""
+
+    id: str = Field(default_factory=lambda: f"diag_{uuid4().hex}")
+    category: DiagnosticCategory
+    result: DiagnosticResult
+    broker: BrokerId | None = None
+    account: str | None = None
+    message: str = ""
+    duration_ms: int | None = None
     details: dict[str, Any] = Field(default_factory=dict)
     created_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
 
